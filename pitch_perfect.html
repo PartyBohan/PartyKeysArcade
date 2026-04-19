@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pitch Perfect - MIDI Ear Training</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg1: #0a0a1a;
+            --bg2: #0d1b2a;
+            --accent: #00f5d4;
+            --danger: #ff6b6b;
+            --text: #e0e0e0;
+            --card-bg: rgba(255,255,255,0.05);
+            --success: #00e676;
+            --warning: #ffd166;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg1), var(--bg2));
+            min-height: 100vh;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 10px 15px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .header h1 {
+            font-size: 1.6em;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* MIDI Status */
+        .midi-bar {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 6px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85em;
+        }
+
+        .midi-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            margin-right: 8px;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .midi-dot.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        /* Stats Row */
+        .stats-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 100px;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 12px;
+            text-align: center;
+        }
+
+        .stat-label { font-size: 0.7em; text-transform: uppercase; opacity: 0.6; letter-spacing: 1px; }
+        .stat-value { font-size: 1.4em; font-weight: bold; color: var(--accent); margin-top: 2px; }
+        .stat-value.danger { color: var(--danger); }
+        .stat-value.warning { color: var(--warning); }
+
+        /* XP Bar */
+        .xp-bar-container {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 14px;
+            margin-bottom: 8px;
+        }
+        .xp-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75em;
+            margin-bottom: 4px;
+            opacity: 0.7;
+        }
+        .xp-bar-track {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .xp-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #a78bfa);
+            border-radius: 4px;
+            transition: width 0.6s ease;
+            width: 0%;
+        }
+
+        /* Controls Row */
+        .controls-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .ctrl-group {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.82em;
+        }
+
+        .ctrl-group label { opacity: 0.6; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .diff-btn, .hint-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+        .diff-btn:hover, .hint-btn:hover { background: rgba(255,255,255,0.12); }
+        .diff-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,245,212,0.1); }
+        .hint-btn.active { border-color: var(--warning); color: var(--warning); background: rgba(255,209,102,0.1); }
+
+        .vol-slider {
+            width: 60px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .mute-btn {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .mute-btn.muted { border-color: var(--danger); color: var(--danger); }
+
+        /* Canvas */
+        .canvas-wrapper {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: center;
+        }
+        .game-canvas {
+            border-radius: 8px;
+            display: block;
+            max-width: 100%;
+        }
+
+        /* Virtual Keyboard */
+        .keyboard-container {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+        .keyboard {
+            display: flex;
+            position: relative;
+            height: 100px;
+            user-select: none;
+        }
+        .white-key {
+            flex: 1;
+            background: linear-gradient(180deg, #f8f8f8, #e8e8e8);
+            border: 1px solid #bbb;
+            border-radius: 0 0 5px 5px;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            transition: background 0.1s;
+        }
+        .white-key:active, .white-key.pressed { background: linear-gradient(180deg, #ddd, #ccc); }
+        .white-key.led-on { box-shadow: inset 0 0 20px var(--led-color, #00f5d4); }
+        .black-key {
+            width: 60%;
+            height: 60%;
+            background: linear-gradient(180deg, #333, #111);
+            border-radius: 0 0 4px 4px;
+            position: absolute;
+            z-index: 2;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .black-key:active, .black-key.pressed { background: linear-gradient(180deg, #555, #333); }
+        .black-key.led-on { box-shadow: inset 0 0 15px var(--led-color, #00f5d4); }
+
+        .key-label {
+            position: absolute;
+            bottom: 3px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.55em;
+            color: #888;
+            pointer-events: none;
+        }
+
+        /* Shortcuts */
+        .shortcuts {
+            text-align: center;
+            font-size: 0.7em;
+            opacity: 0.4;
+            margin-top: 4px;
+        }
+        .shortcuts span {
+            margin: 0 8px;
+        }
+        .shortcuts kbd {
+            background: rgba(255,255,255,0.1);
+            padding: 1px 5px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <h1>Pitch Perfect</h1>
+        <div class="top-bar">
+            <span style="font-size:0.8em;opacity:0.5;">Ear Training Quiz</span>
+        </div>
+    </div>
+
+    <!-- MIDI Bar -->
+    <div class="midi-bar">
+        <div style="display:flex;align-items:center;">
+            <span class="midi-dot" id="midiDot"></span>
+            <span id="midiStatus">MIDI: Searching for devices...</span>
+        </div>
+        <span id="midiDevice" style="opacity:0.5;font-size:0.85em;"></span>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-label">Score</div>
+            <div class="stat-value" id="scoreDisplay">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Streak</div>
+            <div class="stat-value" id="streakDisplay">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Accuracy</div>
+            <div class="stat-value" id="accuracyDisplay">--</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">XP Level</div>
+            <div class="stat-value" id="levelDisplay">1</div>
+        </div>
+    </div>
+
+    <!-- XP Bar -->
+    <div class="xp-bar-container">
+        <div class="xp-bar-header">
+            <span id="xpLabel">XP: 0</span>
+            <span id="xpNext">Next unlock: 500 XP</span>
+        </div>
+        <div class="xp-bar-track">
+            <div class="xp-bar-fill" id="xpBarFill"></div>
+        </div>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="controls-row">
+        <div class="ctrl-group">
+            <label>Difficulty</label>
+            <button class="diff-btn active" data-diff="easy">Easy</button>
+            <button class="diff-btn" data-diff="medium">Medium</button>
+            <button class="diff-btn" data-diff="hard">Hard</button>
+        </div>
+        <div class="ctrl-group">
+            <label>Hint [H]</label>
+            <span id="hintLevel" style="color:var(--warning);font-weight:bold;">OFF (x3)</span>
+        </div>
+        <div class="ctrl-group">
+            <label>BGM</label>
+            <input type="range" class="vol-slider" id="bgmVol" min="0" max="100" value="25">
+        </div>
+        <div class="ctrl-group">
+            <label>SFX</label>
+            <input type="range" class="vol-slider" id="sfxVol" min="0" max="100" value="70">
+        </div>
+        <div class="ctrl-group">
+            <label>Keys</label>
+            <input type="range" class="vol-slider" id="keysVol" min="0" max="100" value="50">
+        </div>
+        <div class="ctrl-group">
+            <button class="mute-btn" id="muteBtn">Mute All</button>
+        </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrapper">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="450"></canvas>
+    </div>
+
+    <!-- Virtual Keyboard -->
+    <div class="keyboard-container">
+        <div class="keyboard" id="keyboard"></div>
+    </div>
+
+    <!-- Shortcuts -->
+    <div class="shortcuts">
+        <span><kbd>Space</kbd> Replay</span>
+        <span><kbd>H</kbd> Cycle Hints</span>
+        <span><kbd>R</kbd> Restart</span>
+        <span><kbd>Esc</kbd> Menu</span>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// PITCH PERFECT - MIDI Ear Training Game
+// ============================================================
+
+// --- Constants ---
+const INTERVALS = {
+    'm2':1, 'M2':2, 'm3':3, 'M3':4, 'P4':5,
+    'tritone':6, 'P5':7, 'm6':8, 'M6':9, 'm7':10, 'M7':11, 'P8':12
+};
+const INTERVAL_NAMES = {
+    'm2':'Minor 2nd','M2':'Major 2nd','m3':'Minor 3rd','M3':'Major 3rd',
+    'P4':'Perfect 4th','tritone':'Tritone','P5':'Perfect 5th',
+    'm6':'Minor 6th','M6':'Major 6th','m7':'Minor 7th','M7':'Major 7th','P8':'Octave'
+};
+const CHORD_TYPES = {
+    'major':[0,4,7],'minor':[0,3,7],'7':[0,4,7,10],'maj7':[0,4,7,11],
+    'min7':[0,3,7,10],'dim':[0,3,6],'aug':[0,4,8],'sus4':[0,5,7],'sus2':[0,2,7]
+};
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const MIDI_MIN = 48, MIDI_MAX = 83;
+const LED_COLORS = {off:0, red:10, green:30, blue:50, yellow:70, cyan:90, purple:110, white:125};
+const XP_THRESHOLDS = [
+    {xp:0, label:'Basic Intervals', items:['m2','M2','m3','M3','P4','P5']},
+    {xp:500, label:'Extended Intervals', items:['tritone','m6','M6','m7','M7','P8']},
+    {xp:1500, label:'Basic Chords', items:['major','minor']},
+    {xp:4000, label:'Extended Chords', items:['7','maj7','min7']},
+    {xp:10000, label:'All Chords', items:['dim','aug','sus4','sus2']}
+];
+const HINT_LEVELS = [
+    {name:'OFF', mult:3, desc:'No hints'},
+    {name:'LOW', mult:2, desc:'Root note shown'},
+    {name:'MED', mult:1, desc:'All notes dim'},
+    {name:'FULL', mult:0.5, desc:'All notes bright'}
+];
+
+// --- State ---
+let audioCtx = null, masterGain, bgmGain, sfxGain, keysGain;
+let midiAccess = null, midiInput = null, midiOutput = null;
+let gameState = 'menu'; // menu, playing, feedback, paused
+let score = 0, streak = 0, totalQ = 0, correctQ = 0, xp = 0;
+let difficulty = 'easy', hintLevel = 0;
+let currentQuestion = null;
+let playerNotes = new Set();
+let playerNotesList = [];
+let spacedRep = new Map(); // key -> {correct, total, lastMissedAt}
+let missedQueue = []; // recently missed items for priority replay
+let isMuted = false;
+let bgmNodes = [];
+let animFrame = null;
+let particles = [];
+let floatingNotes = [];
+let feedbackTimer = null;
+let questionAnim = {phase:'idle', t:0};
+let scoreAnim = {target:0, current:0};
+let streakFire = [];
+let cardAlpha = 0, cardTargetAlpha = 1;
+let replayPulse = 0;
+let canvasW = 1060, canvasH = 450;
+let lastTime = 0;
+
+// Virtual keyboard LED state
+let keyLEDs = {}; // midiNote -> color string
+
+// --- DOM ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- Audio Setup ---
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0;
+    masterGain.connect(audioCtx.destination);
+
+    bgmGain = audioCtx.createGain();
+    bgmGain.gain.value = 0.25;
+    bgmGain.connect(masterGain);
+
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.7;
+    sfxGain.connect(masterGain);
+
+    keysGain = audioCtx.createGain();
+    keysGain.gain.value = 0.5;
+    keysGain.connect(masterGain);
+
+    startBGM();
+}
+
+// --- Piano Synthesis ---
+function midiToFreq(note) { return 440 * Math.pow(2, (note - 69) / 12); }
+
+function playPianoNote(midiNote, destination, duration = 2.0, velocity = 0.5) {
+    if (!audioCtx) return;
+    const freq = midiToFreq(midiNote);
+    const now = audioCtx.currentTime;
+    const partials = [
+        {ratio:1, amp:1.0},
+        {ratio:2, amp:0.35},
+        {ratio:3, amp:0.15},
+        {ratio:4, amp:0.08},
+        {ratio:5, amp:0.03}
+    ];
+
+    const noteGain = audioCtx.createGain();
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 3500 + (midiNote - 60) * 30;
+    filter.Q.value = 1.2;
+    filter.connect(noteGain);
+    noteGain.connect(destination);
+
+    // ADSR
+    const attack = 0.003 + Math.random() * 0.005;
+    const decayBase = midiNote < 60 ? 2.0 : midiNote < 72 ? 1.2 : 0.6;
+    const decay = decayBase;
+    const sustain = 0.2;
+    const release = 0.4;
+
+    noteGain.gain.setValueAtTime(0, now);
+    noteGain.gain.linearRampToValueAtTime(velocity, now + attack);
+    noteGain.gain.exponentialRampToValueAtTime(Math.max(velocity * sustain, 0.001), now + attack + decay);
+    noteGain.gain.setValueAtTime(velocity * sustain, now + duration - release);
+    noteGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    noteGain.gain.setValueAtTime(0, now + duration + 0.01);
+
+    partials.forEach(p => {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        const detune = (Math.random() - 0.5) * 6; // +/- 3 cents
+        osc.frequency.value = freq * p.ratio;
+        osc.detune.value = detune;
+        const pGain = audioCtx.createGain();
+        pGain.gain.value = p.amp;
+        osc.connect(pGain);
+        pGain.connect(filter);
+        osc.start(now);
+        osc.stop(now + duration + 0.05);
+    });
+}
+
+function playInterval(rootNote, semitones, dest) {
+    playPianoNote(rootNote, dest, 2.0, 0.55);
+    setTimeout(() => playPianoNote(rootNote + semitones, dest, 2.0, 0.55), 300);
+}
+
+function playChord(rootNote, intervals, dest) {
+    intervals.forEach((semi, i) => {
+        setTimeout(() => playPianoNote(rootNote + semi, dest, 2.0, 0.45), i * 30);
+    });
+}
+
+// --- BGM ---
+function startBGM() {
+    if (!audioCtx) return;
+    // Subtle ambient pad: C and F alternating
+    function playPad(note, startTime, dur) {
+        const freq = midiToFreq(note);
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0, startTime);
+        g.gain.linearRampToValueAtTime(0.06, startTime + 2);
+        g.gain.setValueAtTime(0.06, startTime + dur - 2);
+        g.gain.linearRampToValueAtTime(0, startTime + dur);
+        osc.connect(g);
+        g.connect(bgmGain);
+        osc.start(startTime);
+        osc.stop(startTime + dur + 0.1);
+        // Add fifth
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = freq * 1.5;
+        const g2 = audioCtx.createGain();
+        g2.gain.setValueAtTime(0, startTime);
+        g2.gain.linearRampToValueAtTime(0.03, startTime + 2);
+        g2.gain.setValueAtTime(0.03, startTime + dur - 2);
+        g2.gain.linearRampToValueAtTime(0, startTime + dur);
+        osc2.connect(g2);
+        g2.connect(bgmGain);
+        osc2.start(startTime);
+        osc2.stop(startTime + dur + 0.1);
+    }
+    function scheduleBGMLoop() {
+        const now = audioCtx.currentTime;
+        playPad(48, now, 8);      // C3
+        playPad(53, now + 8, 8);  // F3
+        setTimeout(scheduleBGMLoop, 15000);
+    }
+    scheduleBGMLoop();
+}
+
+// --- MIDI ---
+async function initMIDI() {
+    try {
+        midiAccess = await navigator.requestMIDIAccess({sysex: false});
+        midiAccess.onstatechange = scanMIDI;
+        scanMIDI();
+    } catch(e) {
+        document.getElementById('midiStatus').textContent = 'MIDI: Not available (use virtual keyboard)';
+    }
+}
+
+function scanMIDI() {
+    midiInput = null; midiOutput = null;
+    for (const input of midiAccess.inputs.values()) {
+        if (!midiInput) { midiInput = input; midiInput.onmidimessage = onMIDIMessage; }
+    }
+    for (const output of midiAccess.outputs.values()) {
+        if (!midiOutput) midiOutput = output;
+    }
+    const dot = document.getElementById('midiDot');
+    const status = document.getElementById('midiStatus');
+    const device = document.getElementById('midiDevice');
+    if (midiInput) {
+        dot.classList.add('connected');
+        status.textContent = 'MIDI: Connected';
+        device.textContent = midiInput.name || '';
+    } else {
+        dot.classList.remove('connected');
+        status.textContent = 'MIDI: No device (use virtual keyboard)';
+        device.textContent = '';
+    }
+}
+
+function onMIDIMessage(e) {
+    const [cmd, note, vel] = e.data;
+    if (cmd === 0x90 && vel > 0) onNoteOn(note, vel);
+    else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) onNoteOff(note);
+}
+
+function sendLED(note, colorVel) {
+    if (midiOutput) {
+        try {
+            if (colorVel === 0) midiOutput.send([0x80, note, 0]);
+            else midiOutput.send([0x90, note, colorVel]);
+        } catch(e) {}
+    }
+}
+
+function clearAllLEDs() {
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
+        sendLED(n, 0);
+        delete keyLEDs[n];
+    }
+    updateVirtualKeyboardLEDs();
+}
+
+function setLED(note, color) {
+    sendLED(note, LED_COLORS[color] || 0);
+    if (color === 'off' || !color) delete keyLEDs[note];
+    else keyLEDs[note] = color;
+    updateVirtualKeyboardLEDs();
+}
+
+// --- Note Input ---
+function onNoteOn(note, vel) {
+    initAudio();
+    if (note < MIDI_MIN || note > MIDI_MAX) return;
+    playPianoNote(note, keysGain, 1.5, 0.4);
+    highlightVirtualKey(note, true);
+
+    if (gameState === 'playing' && currentQuestion) {
+        playerNotes.add(note);
+        playerNotesList.push(note);
+        checkAnswer();
+    }
+}
+
+function onNoteOff(note) {
+    highlightVirtualKey(note, false);
+}
+
+function checkAnswer() {
+    if (!currentQuestion) return;
+    const q = currentQuestion;
+    const expected = q.notes;
+    const needed = expected.length;
+
+    if (playerNotesList.length >= needed) {
+        // Check if the last N notes match expected (order doesn't matter for chords, order matters for intervals)
+        const played = playerNotesList.slice(-needed);
+        let correct = false;
+
+        if (q.type === 'interval') {
+            // For intervals: player must play root then interval note in order
+            // Or just play both notes (the exact midi notes)
+            const sortedPlayed = [...played].sort((a,b) => a-b);
+            const sortedExpected = [...expected].sort((a,b) => a-b);
+            correct = sortedPlayed.length === sortedExpected.length &&
+                      sortedPlayed.every((n,i) => n === sortedExpected[i]);
+        } else {
+            // For chords: check all notes present (any order)
+            const sortedPlayed = [...played].sort((a,b) => a-b);
+            const sortedExpected = [...expected].sort((a,b) => a-b);
+            correct = sortedPlayed.length === sortedExpected.length &&
+                      sortedPlayed.every((n,i) => n === sortedExpected[i]);
+        }
+
+        if (correct) {
+            onCorrectAnswer();
+        } else if (playerNotesList.length >= needed + 2) {
+            // Give some slack, but if too many wrong notes, mark wrong
+            onWrongAnswer(played);
+        }
+    }
+}
+
+function onCorrectAnswer() {
+    gameState = 'feedback';
+    correctQ++;
+    streak++;
+    const mult = HINT_LEVELS[hintLevel].mult;
+    const baseXP = 10;
+    const streakBonus = streak * 2;
+    const gained = Math.round((baseXP * mult) + streakBonus);
+    score += gained;
+    xp += gained;
+    scoreAnim.target = score;
+
+    // Update spaced rep
+    const key = currentQuestion.key;
+    const sr = spacedRep.get(key) || {correct:0, total:0, lastMissedAt:-1};
+    sr.correct++; sr.total++;
+    spacedRep.set(key, sr);
+
+    // LED feedback
+    clearAllLEDs();
+    currentQuestion.notes.forEach(n => setLED(n, 'green'));
+
+    // Particles
+    spawnParticles(canvasW/2, canvasH/2, '#00e676', 20);
+
+    // Streak milestones
+    if ([5,10,25,50,100].includes(streak)) {
+        rainbowCascade();
+    }
+
+    updateUI();
+
+    feedbackTimer = setTimeout(() => {
+        clearAllLEDs();
+        nextQuestion();
+    }, 1200);
+}
+
+function onWrongAnswer(played) {
+    gameState = 'feedback';
+    streak = 0;
+
+    const key = currentQuestion.key;
+    const sr = spacedRep.get(key) || {correct:0, total:0, lastMissedAt:-1};
+    sr.total++;
+    sr.lastMissedAt = totalQ;
+    spacedRep.set(key, sr);
+
+    // Add to missed queue
+    if (!missedQueue.includes(key)) missedQueue.push(key);
+    if (missedQueue.length > 5) missedQueue.shift();
+
+    // LED feedback
+    clearAllLEDs();
+    played.forEach(n => {
+        if (!currentQuestion.notes.includes(n)) setLED(n, 'red');
+    });
+    currentQuestion.notes.forEach(n => setLED(n, 'cyan'));
+
+    spawnParticles(canvasW/2, canvasH/2, '#ff6b6b', 15);
+    updateUI();
+
+    feedbackTimer = setTimeout(() => {
+        clearAllLEDs();
+        nextQuestion();
+    }, 2000);
+}
+
+function rainbowCascade() {
+    const colors = ['red','green','blue','yellow','cyan','purple'];
+    let i = 0;
+    const interval = setInterval(() => {
+        if (i >= 36) { clearInterval(interval); return; }
+        const note = MIDI_MIN + i;
+        setLED(note, colors[i % colors.length]);
+        setTimeout(() => setLED(note, 'off'), 400);
+        i++;
+    }, 25);
+}
+
+// --- Question Generation ---
+function getUnlockedItems() {
+    let items = [];
+    for (const threshold of XP_THRESHOLDS) {
+        if (xp >= threshold.xp) {
+            threshold.items.forEach(item => items.push(item));
+        }
+    }
+    // Filter by difficulty
+    const intervalKeys = Object.keys(INTERVALS);
+    const chordKeys = Object.keys(CHORD_TYPES);
+    if (difficulty === 'easy') {
+        items = items.filter(i => intervalKeys.includes(i));
+    } else if (difficulty === 'medium') {
+        items = items.filter(i => intervalKeys.includes(i) || ['major','minor'].includes(i));
+    }
+    // hard = all unlocked
+    return items;
+}
+
+function getWeightedItem(items) {
+    // Check missed queue first
+    if (missedQueue.length > 0 && Math.random() < 0.4) {
+        const missed = missedQueue.find(m => items.includes(m));
+        if (missed) return missed;
+    }
+
+    // Weight by spaced repetition
+    const weights = items.map(item => {
+        const sr = spacedRep.get(item);
+        if (!sr || sr.total === 0) return 2; // new items get moderate weight
+        const acc = sr.correct / sr.total;
+        if (acc < 0.5) return 3;
+        if (acc < 0.7) return 2;
+        return 1;
+    });
+    const totalW = weights.reduce((a,b) => a+b, 0);
+    let r = Math.random() * totalW;
+    for (let i = 0; i < items.length; i++) {
+        r -= weights[i];
+        if (r <= 0) return items[i];
+    }
+    return items[items.length - 1];
+}
+
+function generateQuestion() {
+    const items = getUnlockedItems();
+    if (items.length === 0) return null;
+
+    const chosen = getWeightedItem(items);
+    const intervalKeys = Object.keys(INTERVALS);
+
+    // Pick a random root note in a comfortable range
+    const rootRange = {min: 48, max: 71};
+
+    if (intervalKeys.includes(chosen)) {
+        const semitones = INTERVALS[chosen];
+        const maxRoot = Math.min(rootRange.max, MIDI_MAX - semitones);
+        const root = rootRange.min + Math.floor(Math.random() * (maxRoot - rootRange.min + 1));
+        return {
+            type: 'interval',
+            key: chosen,
+            name: INTERVAL_NAMES[chosen] || chosen,
+            label: chosen,
+            root: root,
+            notes: [root, root + semitones],
+            rootName: NOTE_NAMES[root % 12]
+        };
+    } else {
+        const intervals = CHORD_TYPES[chosen];
+        const maxSemi = Math.max(...intervals);
+        const maxRoot = Math.min(rootRange.max, MIDI_MAX - maxSemi);
+        const root = rootRange.min + Math.floor(Math.random() * (maxRoot - rootRange.min + 1));
+        const notes = intervals.map(s => root + s);
+        return {
+            type: 'chord',
+            key: chosen,
+            name: chosen.charAt(0).toUpperCase() + chosen.slice(1),
+            label: chosen,
+            root: root,
+            notes: notes,
+            rootName: NOTE_NAMES[root % 12]
+        };
+    }
+}
+
+function nextQuestion() {
+    totalQ++;
+    playerNotes.clear();
+    playerNotesList = [];
+    currentQuestion = generateQuestion();
+    if (!currentQuestion) {
+        gameState = 'menu';
+        return;
+    }
+    gameState = 'playing';
+    cardAlpha = 0;
+    cardTargetAlpha = 1;
+    questionAnim = {phase:'in', t:0};
+
+    // Apply hints
+    applyHintLEDs();
+
+    // Play the sound after a short delay
+    setTimeout(() => playCurrentQuestion(), 500);
+    updateUI();
+}
+
+function playCurrentQuestion() {
+    if (!currentQuestion || !audioCtx) return;
+    initAudio();
+    const q = currentQuestion;
+    if (q.type === 'interval') {
+        playInterval(q.root, INTERVALS[q.key], sfxGain);
+    } else {
+        playChord(q.root, CHORD_TYPES[q.key], sfxGain);
+    }
+    replayPulse = 1.0;
+}
+
+function applyHintLEDs() {
+    clearAllLEDs();
+    if (!currentQuestion) return;
+    const q = currentQuestion;
+    if (hintLevel === 1) {
+        // Root note only in white
+        setLED(q.root, 'white');
+    } else if (hintLevel === 2) {
+        // All notes dim blue
+        q.notes.forEach(n => setLED(n, 'blue'));
+    } else if (hintLevel === 3) {
+        // All notes bright cyan
+        q.notes.forEach(n => setLED(n, 'cyan'));
+    }
+}
+
+// --- Game Flow ---
+function startGame() {
+    initAudio();
+    score = 0; streak = 0; totalQ = 0; correctQ = 0;
+    scoreAnim = {target:0, current:0};
+    gameState = 'playing';
+    spacedRep.clear();
+    missedQueue = [];
+    clearAllLEDs();
+    nextQuestion();
+}
+
+function updateUI() {
+    document.getElementById('scoreDisplay').textContent = score;
+    document.getElementById('streakDisplay').textContent = streak;
+    const acc = totalQ > 0 ? Math.round((correctQ / totalQ) * 100) : '--';
+    document.getElementById('accuracyDisplay').textContent = totalQ > 0 ? acc + '%' : '--';
+
+    // XP and level
+    let level = 1;
+    let currentThresholdXP = 0, nextThresholdXP = 500;
+    for (let i = 0; i < XP_THRESHOLDS.length; i++) {
+        if (xp >= XP_THRESHOLDS[i].xp) {
+            level = i + 1;
+            currentThresholdXP = XP_THRESHOLDS[i].xp;
+            nextThresholdXP = (i + 1 < XP_THRESHOLDS.length) ? XP_THRESHOLDS[i+1].xp : XP_THRESHOLDS[i].xp + 5000;
+        }
+    }
+    document.getElementById('levelDisplay').textContent = level;
+    document.getElementById('xpLabel').textContent = `XP: ${xp}`;
+
+    const nextUnlock = XP_THRESHOLDS.find(t => t.xp > xp);
+    document.getElementById('xpNext').textContent = nextUnlock ? `Next unlock: ${nextUnlock.label} (${nextUnlock.xp} XP)` : 'All unlocked!';
+
+    const progress = (xp - currentThresholdXP) / Math.max(1, nextThresholdXP - currentThresholdXP);
+    document.getElementById('xpBarFill').style.width = Math.min(100, progress * 100) + '%';
+
+    // Hint display
+    const h = HINT_LEVELS[hintLevel];
+    document.getElementById('hintLevel').textContent = `${h.name} (x${h.mult})`;
+
+    // Streak styling
+    const streakEl = document.getElementById('streakDisplay');
+    if (streak >= 10) { streakEl.className = 'stat-value warning'; }
+    else if (streak >= 5) { streakEl.className = 'stat-value'; streakEl.style.color = '#ff9800'; }
+    else { streakEl.className = 'stat-value'; streakEl.style.color = ''; }
+}
+
+// --- Virtual Keyboard ---
+function buildKeyboard() {
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+    const whiteNotes = [];
+    const blackNotes = [];
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
+        const pc = n % 12;
+        if ([1,3,6,8,10].includes(pc)) blackNotes.push(n);
+        else whiteNotes.push(n);
+    }
+
+    // Create white keys
+    whiteNotes.forEach((note, i) => {
+        const key = document.createElement('div');
+        key.className = 'white-key';
+        key.dataset.note = note;
+        const label = document.createElement('span');
+        label.className = 'key-label';
+        const pc = note % 12;
+        const octave = Math.floor(note / 12) - 1;
+        label.textContent = NOTE_NAMES[pc] + octave;
+        key.appendChild(label);
+        key.addEventListener('mousedown', (e) => { e.preventDefault(); onNoteOn(note, 80); });
+        key.addEventListener('mouseup', () => onNoteOff(note));
+        key.addEventListener('mouseleave', () => onNoteOff(note));
+        key.addEventListener('touchstart', (e) => { e.preventDefault(); onNoteOn(note, 80); });
+        key.addEventListener('touchend', () => onNoteOff(note));
+        kb.appendChild(key);
+    });
+
+    // Create black keys
+    const whiteWidth = 100 / whiteNotes.length;
+    blackNotes.forEach(note => {
+        const key = document.createElement('div');
+        key.className = 'black-key';
+        key.dataset.note = note;
+        // Position black key
+        const prevWhite = whiteNotes.filter(w => w < note).length;
+        const leftPos = (prevWhite * whiteWidth) - (whiteWidth * 0.3);
+        key.style.left = leftPos + '%';
+        key.style.width = (whiteWidth * 0.6) + '%';
+        key.addEventListener('mousedown', (e) => { e.preventDefault(); onNoteOn(note, 80); });
+        key.addEventListener('mouseup', () => onNoteOff(note));
+        key.addEventListener('mouseleave', () => onNoteOff(note));
+        key.addEventListener('touchstart', (e) => { e.preventDefault(); onNoteOn(note, 80); });
+        key.addEventListener('touchend', () => onNoteOff(note));
+        kb.appendChild(key);
+    });
+}
+
+function highlightVirtualKey(note, on) {
+    const key = document.querySelector(`.keyboard [data-note="${note}"]`);
+    if (key) {
+        if (on) key.classList.add('pressed');
+        else key.classList.remove('pressed');
+    }
+}
+
+function updateVirtualKeyboardLEDs() {
+    document.querySelectorAll('.keyboard .white-key, .keyboard .black-key').forEach(el => {
+        const note = parseInt(el.dataset.note);
+        const color = keyLEDs[note];
+        if (color) {
+            el.classList.add('led-on');
+            const colorMap = {
+                red:'#ff4444', green:'#00e676', blue:'#4488ff',
+                yellow:'#ffdd44', cyan:'#00f5d4', purple:'#aa44ff', white:'#ffffff'
+            };
+            el.style.setProperty('--led-color', colorMap[color] || '#00f5d4');
+        } else {
+            el.classList.remove('led-on');
+        }
+    });
+}
+
+// --- Canvas Rendering ---
+function initFloatingNotes() {
+    const symbols = ['\u266A', '\u266B', '\u266C', '\u2669', '\u{1D11E}', '\u{1D122}'];
+    for (let i = 0; i < 15; i++) {
+        floatingNotes.push({
+            x: Math.random() * canvasW,
+            y: Math.random() * canvasH,
+            vx: (Math.random() - 0.5) * 0.3,
+            vy: -0.2 - Math.random() * 0.3,
+            size: 12 + Math.random() * 18,
+            alpha: 0.03 + Math.random() * 0.06,
+            symbol: symbols[Math.floor(Math.random() * symbols.length)]
+        });
+    }
+}
+
+function spawnParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.3;
+        const speed = 2 + Math.random() * 4;
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            decay: 0.015 + Math.random() * 0.02,
+            color,
+            size: 3 + Math.random() * 4
+        });
+    }
+}
+
+function drawRoundedRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function render(timestamp) {
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+    lastTime = timestamp;
+
+    ctx.clearRect(0, 0, canvasW, canvasH);
+
+    // Background gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
+    bgGrad.addColorStop(0, '#0a0a1a');
+    bgGrad.addColorStop(1, '#0d1b2a');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // Floating notes
+    floatingNotes.forEach(n => {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.y < -30) { n.y = canvasH + 30; n.x = Math.random() * canvasW; }
+        if (n.x < -20) n.x = canvasW + 20;
+        if (n.x > canvasW + 20) n.x = -20;
+        ctx.save();
+        ctx.globalAlpha = n.alpha;
+        ctx.fillStyle = '#a78bfa';
+        ctx.font = `${n.size}px serif`;
+        ctx.fillText(n.symbol, n.x, n.y);
+        ctx.restore();
+    });
+
+    // Animate card alpha
+    cardAlpha += (cardTargetAlpha - cardAlpha) * 5 * dt;
+
+    // Animate score
+    scoreAnim.current += (scoreAnim.target - scoreAnim.current) * 4 * dt;
+
+    // Replay pulse
+    if (replayPulse > 0) replayPulse -= dt * 2;
+
+    if (gameState === 'menu') {
+        drawMenu();
+    } else if (gameState === 'playing' || gameState === 'feedback') {
+        drawQuizCard(dt);
+        drawScoreCounter();
+        drawStreakIndicator();
+        drawStats();
+    }
+
+    // Particles
+    particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.05; // gravity
+        p.life -= p.decay;
+        if (p.life <= 0) { particles.splice(i, 1); return; }
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+
+    animFrame = requestAnimationFrame(render);
+}
+
+function drawMenu() {
+    // Title
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#00f5d4';
+    ctx.font = 'bold 48px Segoe UI, sans-serif';
+    ctx.fillText('Pitch Perfect', canvasW/2, 120);
+
+    ctx.font = '18px Segoe UI, sans-serif';
+    ctx.fillStyle = '#a78bfa';
+    ctx.fillText('Train your ear. Master intervals and chords.', canvasW/2, 160);
+
+    // Start button
+    const bx = canvasW/2 - 120, by = 200, bw = 240, bh = 55;
+    drawRoundedRect(bx, by, bw, bh, 12);
+    const grad = ctx.createLinearGradient(bx, by, bx + bw, by + bh);
+    grad.addColorStop(0, '#00f5d4');
+    grad.addColorStop(1, '#a78bfa');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.fillStyle = '#0a0a1a';
+    ctx.font = 'bold 22px Segoe UI, sans-serif';
+    ctx.fillText('Start Game', canvasW/2, by + 35);
+
+    // Instructions
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '14px Segoe UI, sans-serif';
+    const instructions = [
+        'Listen to the interval or chord played',
+        'Play it back on your MIDI keyboard (or click virtual keys)',
+        'Press H to cycle hint levels',
+        'Press SPACE to replay the sound',
+    ];
+    instructions.forEach((txt, i) => {
+        ctx.fillText(txt, canvasW/2, 300 + i * 24);
+    });
+
+    ctx.restore();
+
+    // Click handler for start button
+    canvas._menuBtn = {x:bx, y:by, w:bw, h:bh};
+}
+
+function drawQuizCard(dt) {
+    if (!currentQuestion) return;
+    const q = currentQuestion;
+
+    // Card background
+    const cw = 420, ch = 260;
+    const cx = (canvasW - cw) / 2;
+    const cy = 40;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(cardAlpha, 1);
+
+    // Card shadow
+    ctx.shadowColor = 'rgba(0,245,212,0.1)';
+    ctx.shadowBlur = 30;
+    drawRoundedRect(cx, cy, cw, ch, 16);
+    ctx.fillStyle = 'rgba(13,27,42,0.9)';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Card border
+    ctx.strokeStyle = 'rgba(0,245,212,0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Question type label
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(167,139,250,0.7)';
+    ctx.font = '13px Segoe UI, sans-serif';
+    ctx.fillText(`Question ${totalQ}`, canvasW/2, cy + 30);
+
+    // Main question
+    ctx.fillStyle = '#00f5d4';
+    ctx.font = 'bold 26px Segoe UI, sans-serif';
+    if (q.type === 'interval') {
+        ctx.fillText('What interval is this?', canvasW/2, cy + 70);
+    } else {
+        ctx.fillText('What chord is this?', canvasW/2, cy + 70);
+    }
+
+    // Hint level indicator
+    const hintInfo = HINT_LEVELS[hintLevel];
+    ctx.fillStyle = hintLevel === 0 ? 'rgba(255,255,255,0.3)' : '#ffd166';
+    ctx.font = '12px Segoe UI, sans-serif';
+    ctx.fillText(`Hint: ${hintInfo.name} (${hintInfo.desc}) | Score x${hintInfo.mult}`, canvasW/2, cy + 100);
+
+    // Replay button
+    const rbx = canvasW/2 - 50, rby = cy + 120, rbw = 100, rbh = 36;
+    drawRoundedRect(rbx, rby, rbw, rbh, 8);
+    const pulseGlow = Math.max(0, replayPulse);
+    ctx.fillStyle = `rgba(0,245,212,${0.15 + pulseGlow * 0.3})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0,245,212,${0.4 + pulseGlow * 0.4})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#00f5d4';
+    ctx.font = '14px Segoe UI, sans-serif';
+    ctx.fillText('\u25B6 Replay', canvasW/2, rby + 23);
+    canvas._replayBtn = {x:rbx, y:rby, w:rbw, h:rbh};
+
+    // Status text
+    if (gameState === 'playing') {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '13px Segoe UI, sans-serif';
+        const neededCount = q.notes.length;
+        const playedCount = playerNotesList.length;
+        ctx.fillText(`Play ${neededCount} note${neededCount > 1 ? 's' : ''} (${playedCount} played)`, canvasW/2, cy + 185);
+
+        // Show note names if notes have been played
+        if (playerNotesList.length > 0) {
+            ctx.fillStyle = 'rgba(167,139,250,0.6)';
+            ctx.font = '12px Segoe UI, sans-serif';
+            const playedNames = playerNotesList.slice(-neededCount).map(n => NOTE_NAMES[n % 12]);
+            ctx.fillText('Played: ' + playedNames.join(' - '), canvasW/2, cy + 205);
+        }
+    } else if (gameState === 'feedback') {
+        const isCorrect = correctQ > 0 && streak > 0;
+        if (isCorrect) {
+            ctx.fillStyle = '#00e676';
+            ctx.font = 'bold 28px Segoe UI, sans-serif';
+            ctx.fillText('\u2713 Correct!', canvasW/2, cy + 190);
+            ctx.font = '14px Segoe UI, sans-serif';
+            ctx.fillStyle = 'rgba(0,230,118,0.7)';
+            ctx.fillText(`${q.type === 'interval' ? q.name : q.rootName + ' ' + q.name}`, canvasW/2, cy + 215);
+        } else {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.font = 'bold 28px Segoe UI, sans-serif';
+            ctx.fillText('\u2717 Incorrect', canvasW/2, cy + 190);
+            ctx.font = '14px Segoe UI, sans-serif';
+            ctx.fillStyle = 'rgba(255,107,107,0.7)';
+            ctx.fillText(`Answer: ${q.type === 'interval' ? q.name : q.rootName + ' ' + q.name}`, canvasW/2, cy + 215);
+            // Show the correct notes
+            ctx.fillStyle = 'rgba(0,245,212,0.5)';
+            ctx.font = '12px Segoe UI, sans-serif';
+            const noteStr = q.notes.map(n => NOTE_NAMES[n % 12] + Math.floor(n / 12 - 1)).join(' - ');
+            ctx.fillText('Notes: ' + noteStr, canvasW/2, cy + 238);
+        }
+    }
+
+    ctx.restore();
+
+    // Item pool info (bottom of card area)
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '11px Segoe UI, sans-serif';
+    const unlocked = getUnlockedItems();
+    ctx.fillText(`Active pool: ${unlocked.length} items | Difficulty: ${difficulty}`, canvasW/2, cy + ch + 20);
+    ctx.restore();
+}
+
+function drawScoreCounter() {
+    ctx.save();
+    ctx.textAlign = 'right';
+
+    // Score
+    ctx.fillStyle = 'rgba(0,245,212,0.15)';
+    drawRoundedRect(canvasW - 190, 10, 180, 65, 10);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(0,245,212,0.5)';
+    ctx.font = '11px Segoe UI, sans-serif';
+    ctx.fillText('SCORE', canvasW - 25, 32);
+
+    ctx.fillStyle = '#00f5d4';
+    ctx.font = 'bold 32px Segoe UI, sans-serif';
+    ctx.fillText(Math.round(scoreAnim.current).toString(), canvasW - 25, 65);
+
+    ctx.restore();
+}
+
+function drawStreakIndicator() {
+    if (streak < 1) return;
+    ctx.save();
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = 'rgba(255,152,0,0.15)';
+    drawRoundedRect(10, 10, 140, 55, 10);
+    ctx.fill();
+
+    ctx.fillStyle = streak >= 5 ? '#ff9800' : 'rgba(255,152,0,0.6)';
+    ctx.font = '11px Segoe UI, sans-serif';
+    ctx.fillText('STREAK', 22, 30);
+
+    // Fire emoji for streaks >= 5
+    const fireStr = streak >= 25 ? '\uD83D\uDD25\uD83D\uDD25\uD83D\uDD25' : streak >= 10 ? '\uD83D\uDD25\uD83D\uDD25' : streak >= 5 ? '\uD83D\uDD25' : '';
+    ctx.font = 'bold 26px Segoe UI, sans-serif';
+    ctx.fillText(streak + ' ' + fireStr, 22, 58);
+
+    ctx.restore();
+}
+
+// --- Spaced Rep Stats ---
+function drawStats() {
+    // Bottom area: accuracy per item
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.font = '10px Segoe UI, monospace';
+    let y = canvasH - 60;
+    const items = getUnlockedItems().slice(0, 12);
+    let x = 30;
+    items.forEach(item => {
+        const sr = spacedRep.get(item);
+        const acc = sr && sr.total > 0 ? Math.round(sr.correct / sr.total * 100) : -1;
+        const color = acc < 0 ? 'rgba(255,255,255,0.15)' : acc >= 70 ? 'rgba(0,230,118,0.4)' : acc >= 50 ? 'rgba(255,209,102,0.4)' : 'rgba(255,107,107,0.4)';
+        ctx.fillStyle = color;
+        ctx.fillText(`${item}:${acc < 0 ? '--' : acc + '%'}`, x, y);
+        x += 80;
+        if (x > canvasW - 80) { x = 30; y += 14; }
+    });
+    ctx.restore();
+}
+
+// --- Event Handlers ---
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvasW / rect.width;
+    const scaleY = canvasH / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+
+    if (gameState === 'menu' && canvas._menuBtn) {
+        const b = canvas._menuBtn;
+        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+            startGame();
+        }
+    }
+
+    if ((gameState === 'playing') && canvas._replayBtn) {
+        const b = canvas._replayBtn;
+        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+            playCurrentQuestion();
+        }
+    }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    switch(e.code) {
+        case 'Space':
+            e.preventDefault();
+            if (gameState === 'playing') playCurrentQuestion();
+            else if (gameState === 'menu') startGame();
+            break;
+        case 'KeyH':
+            hintLevel = (hintLevel + 1) % 4;
+            if (gameState === 'playing') applyHintLEDs();
+            updateUI();
+            break;
+        case 'KeyR':
+            if (e.ctrlKey || e.metaKey) return; // don't intercept browser refresh
+            startGame();
+            break;
+        case 'Escape':
+            gameState = 'menu';
+            clearAllLEDs();
+            if (feedbackTimer) clearTimeout(feedbackTimer);
+            break;
+    }
+});
+
+// Volume controls
+document.getElementById('bgmVol').addEventListener('input', (e) => {
+    if (bgmGain) bgmGain.gain.value = e.target.value / 100;
+});
+document.getElementById('sfxVol').addEventListener('input', (e) => {
+    if (sfxGain) sfxGain.gain.value = e.target.value / 100;
+});
+document.getElementById('keysVol').addEventListener('input', (e) => {
+    if (keysGain) keysGain.gain.value = e.target.value / 100;
+});
+document.getElementById('muteBtn').addEventListener('click', (e) => {
+    isMuted = !isMuted;
+    if (masterGain) masterGain.gain.value = isMuted ? 0 : 1;
+    e.target.classList.toggle('muted', isMuted);
+    e.target.textContent = isMuted ? 'Unmute' : 'Mute All';
+});
+
+// Difficulty buttons
+document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        difficulty = btn.dataset.diff;
+    });
+});
+
+// --- Init ---
+function init() {
+    buildKeyboard();
+    initFloatingNotes();
+    initMIDI();
+    updateUI();
+    lastTime = performance.now();
+    animFrame = requestAnimationFrame(render);
+
+    // Ensure audio context starts on first interaction
+    document.addEventListener('click', () => initAudio(), {once: true});
+    document.addEventListener('keydown', () => initAudio(), {once: true});
+}
+
+init();
+</script>
+</body>
+</html>

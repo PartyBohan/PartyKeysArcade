@@ -1,0 +1,2060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chord Flight - MIDI Keyboard Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg1: #0a0a1a;
+            --bg2: #0d1b2a;
+            --accent: #00f5d4;
+            --danger: #ff6b6b;
+            --text: #e0e0e0;
+            --card-bg: rgba(255,255,255,0.05);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg1), var(--bg2));
+            min-height: 100vh;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* ─── Theme: Retro Arcade ─── */
+        body.theme-retro {
+            --bg1: #0a0a0a; --bg2: #1a0a2e;
+            --accent: #00ff88; --danger: #ff2266;
+            font-family: 'Courier New', monospace;
+        }
+        body.theme-retro .game-canvas { image-rendering: pixelated; }
+        body.theme-retro .header h1 {
+            text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88;
+            letter-spacing: 4px;
+        }
+
+        /* ─── Theme: Cartoon ─── */
+        body.theme-cartoon {
+            --bg1: #1a1a40; --bg2: #2d1b69;
+            --accent: #ffd166; --danger: #ef476f;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+        }
+
+        /* ─── Theme: Modern/Sleek ─── */
+        body.theme-modern {
+            --bg1: #0f172a; --bg2: #1e293b;
+            --accent: #38bdf8; --danger: #f43f5e;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 10px 15px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .header h1 {
+            font-size: 1.6em;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .theme-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+        .theme-btn:hover { background: rgba(255,255,255,0.12); }
+        .theme-btn.active { border-color: var(--accent); color: var(--accent); }
+
+        /* ─── MIDI Status ─── */
+        .midi-bar {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.85em;
+        }
+
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+        .status-dot.connected { background: #10b981; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+        .midi-btn {
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 6px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: transform 0.15s;
+        }
+        .midi-btn:hover { transform: scale(1.05); }
+
+        /* ─── Stats Row ─── */
+        .stats-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 80px;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 12px;
+            text-align: center;
+        }
+        .stat-val { font-size: 1.3em; font-weight: 700; color: var(--accent); }
+        .stat-label { font-size: 0.65em; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* ─── Game Canvas ─── */
+        .game-wrapper {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.1);
+            margin-bottom: 8px;
+        }
+        .game-canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(6px);
+            z-index: 10;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .game-overlay.hidden { display: none; }
+        .overlay-title {
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .overlay-sub { font-size: 1em; color: #94a3b8; }
+        .start-btn {
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 12px 36px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .start-btn:hover { transform: scale(1.08); }
+
+        /* ─── Piano Keyboard ─── */
+        .keyboard-section {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 10px;
+            text-align: center;
+        }
+        .keyboard-label {
+            font-size: 0.75em;
+            color: #64748b;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .keyboard {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            height: 110px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .key {
+            position: relative;
+            border-radius: 0 0 5px 5px;
+            cursor: pointer;
+            transition: background 0.1s, box-shadow 0.1s;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            user-select: none;
+        }
+        .key.white {
+            width: 24px;
+            height: 100px;
+            background: linear-gradient(to bottom, #f8f8f8, #e8e8e8);
+            border: 1px solid #ccc;
+            z-index: 0;
+        }
+        .key.black {
+            width: 16px;
+            height: 65px;
+            background: linear-gradient(to bottom, #333, #111);
+            border: 1px solid #000;
+            margin: 0 -8px;
+            z-index: 1;
+        }
+        .key-label {
+            font-size: 0.55em;
+            font-weight: 700;
+            pointer-events: none;
+        }
+        .key.white .key-label { color: #555; }
+        .key.black .key-label { color: #aaa; }
+
+        /* Keyboard LED states */
+        .key.led-hint.white {
+            background: linear-gradient(to bottom, #93c5fd, #60a5fa) !important;
+            box-shadow: 0 0 12px rgba(96,165,250,0.6);
+        }
+        .key.led-hint.black {
+            background: linear-gradient(to bottom, #667eea, #4f46e5) !important;
+            box-shadow: 0 0 12px rgba(79,70,229,0.6);
+        }
+        .key.led-active.white {
+            background: linear-gradient(to bottom, #86efac, #4ade80) !important;
+            box-shadow: 0 0 16px rgba(74,222,128,0.7);
+        }
+        .key.led-active.black {
+            background: linear-gradient(to bottom, #22c55e, #16a34a) !important;
+            box-shadow: 0 0 16px rgba(34,197,94,0.7);
+        }
+        .key.led-danger.white {
+            background: linear-gradient(to bottom, #fca5a5, #f87171) !important;
+            box-shadow: 0 0 16px rgba(248,113,113,0.7);
+        }
+        .key.led-danger.black {
+            background: linear-gradient(to bottom, #ef4444, #dc2626) !important;
+            box-shadow: 0 0 16px rgba(239,68,68,0.7);
+        }
+
+        /* Difficulty selector */
+        .diff-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .diff-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 5px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .diff-btn:hover { background: rgba(255,255,255,0.1); }
+        .diff-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,245,212,0.08); }
+
+        /* Game over screen */
+        .game-over-stats { text-align: center; color: #94a3b8; font-size: 0.95em; line-height: 1.8; }
+        .game-over-stats b { color: var(--accent); }
+
+        /* Notification */
+        .notif {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-80px);
+            background: rgba(16,185,129,0.9);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9em;
+            z-index: 100;
+            transition: transform 0.4s cubic-bezier(.17,.67,.41,1.2);
+            pointer-events: none;
+        }
+        .notif.show { transform: translateX(-50%) translateY(0); }
+        .notif.error { background: rgba(239,68,68,0.9); }
+        .notif.heal { background: rgba(34,197,94,0.9); }
+        .notif.shield { background: rgba(99,102,241,0.9); }
+
+        /* ─── Audio Controls ─── */
+        .audio-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .audio-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 5px 12px;
+            font-size: 0.8em;
+        }
+        .audio-ctrl label { color: #94a3b8; font-size: 0.85em; }
+        .audio-ctrl input[type="range"] {
+            width: 80px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        .mute-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .mute-btn:hover { background: rgba(255,255,255,0.1); }
+        .mute-btn.muted { border-color: var(--danger); color: var(--danger); }
+
+        /* ─── Gameplay Controls Row ─── */
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .ctrl-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82em;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+        .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .ctrl-btn.pause-btn.paused { border-color: #fbbf24; color: #fbbf24; }
+        .ctrl-btn.practice-btn.active { border-color: #34d399; color: #34d399; background: rgba(52,211,153,0.08); }
+        .ctrl-btn.restart-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .kbd {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            font-family: ui-monospace,monospace;
+            font-size: 0.72em;
+            color: #cbd5e1;
+        }
+        .shortcuts-help {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.72em;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        .shortcuts-help .kbd { margin: 0 2px; }
+
+        /* ─── Pause Overlay (on canvas) ─── */
+        .game-wrapper { position: relative; }
+        .pause-banner {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15,23,42,0.88);
+            border: 2px solid var(--accent);
+            border-radius: 16px;
+            padding: 22px 44px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 20;
+            display: none;
+        }
+        .pause-banner.visible { display: block; }
+        .pause-banner-title {
+            font-size: 2.4em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fbbf24, #f472b6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: 4px;
+            margin-bottom: 4px;
+        }
+        .pause-banner-sub {
+            color: #cbd5e1;
+            font-size: 0.85em;
+        }
+        .practice-badge {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(52,211,153,0.15);
+            border: 1px solid #34d399;
+            color: #34d399;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.72em;
+            font-weight: 700;
+            letter-spacing: 1px;
+            z-index: 15;
+            pointer-events: none;
+        }
+        .practice-badge.visible { display: block; }
+    </style>
+</head>
+<body class="theme-modern">
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Chord Flight</h1>
+            <div class="top-bar">
+                <button class="theme-btn active" data-theme="modern">Sleek</button>
+                <button class="theme-btn" data-theme="retro">Retro</button>
+                <button class="theme-btn" data-theme="cartoon">Cartoon</button>
+            </div>
+        </div>
+
+        <!-- MIDI Bar -->
+        <div class="midi-bar">
+            <div>
+                <span class="status-dot" id="statusDot"></span>
+                <span id="midiStatusText">MIDI not connected</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span id="deviceName" style="color:#64748b;font-size:0.8em;"></span>
+                <button class="midi-btn" id="connectBtn" onclick="connectMIDI()">Connect MIDI</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-card"><div class="stat-val" id="scoreVal">0</div><div class="stat-label">Score</div></div>
+            <div class="stat-card"><div class="stat-val" id="comboVal">0</div><div class="stat-label">Combo</div></div>
+            <div class="stat-card"><div class="stat-val" id="hpVal">100</div><div class="stat-label">HP</div></div>
+            <div class="stat-card"><div class="stat-val" id="shieldVal">0</div><div class="stat-label">Shield</div></div>
+            <div class="stat-card"><div class="stat-val" id="levelVal">1</div><div class="stat-label">Level</div></div>
+            <div class="stat-card"><div class="stat-val" id="destroyedVal">0</div><div class="stat-label">Destroyed</div></div>
+        </div>
+
+        <!-- Difficulty -->
+        <div class="diff-row">
+            <button class="diff-btn active" data-diff="easy">Easy (Triads)</button>
+            <button class="diff-btn" data-diff="medium">Medium (7ths)</button>
+            <button class="diff-btn" data-diff="hard">Hard (All)</button>
+        </div>
+
+        <!-- Audio Controls -->
+        <div class="audio-row">
+            <div class="audio-ctrl">
+                <label>BGM</label>
+                <input type="range" id="bgmVol" min="0" max="100" value="40" oninput="setBGMVolume(this.value)">
+            </div>
+            <div class="audio-ctrl">
+                <label>SFX</label>
+                <input type="range" id="sfxVol" min="0" max="100" value="60" oninput="setSFXVolume(this.value)">
+            </div>
+            <div class="audio-ctrl">
+                <label>Keys</label>
+                <input type="range" id="keysVol" min="0" max="100" value="50" oninput="setKeysVolume(this.value)">
+            </div>
+            <button class="mute-btn" id="muteAllBtn" onclick="toggleMuteAll()">Mute All</button>
+        </div>
+
+        <!-- Gameplay Controls -->
+        <div class="controls-row" id="controlsRow">
+            <button class="ctrl-btn pause-btn" id="pauseBtn" onclick="togglePause()" disabled>Pause <span class="kbd">Space</span></button>
+            <button class="ctrl-btn restart-btn" id="restartBtn" onclick="restartGame()" disabled>Restart <span class="kbd">R</span></button>
+            <button class="ctrl-btn practice-btn" id="practiceBtn" onclick="togglePractice()">Practice <span class="kbd">P</span></button>
+        </div>
+        <div class="shortcuts-help">
+            <span class="kbd">Space</span> Pause&ensp;
+            <span class="kbd">R</span> Restart&ensp;
+            <span class="kbd">P</span> Practice mode&ensp;
+            <span class="kbd">Esc</span> End game&ensp;
+            <span class="kbd">&uarr;&darr;</span> Move plane
+        </div>
+
+        <!-- Game Canvas -->
+        <div class="game-wrapper">
+            <canvas class="game-canvas" id="gameCanvas" width="1060" height="380"></canvas>
+            <div class="pause-banner" id="pauseBanner">
+                <div class="pause-banner-title">PAUSED</div>
+                <div class="pause-banner-sub">Press <b>Space</b> to resume</div>
+            </div>
+            <div class="practice-badge" id="practiceBadge">PRACTICE MODE</div>
+            <div class="game-overlay" id="gameOverlay">
+                <div class="overlay-title" id="overlayTitle">Chord Flight</div>
+                <div class="overlay-sub" id="overlaySub">Play chords on your MIDI keyboard to destroy incoming stones!</div>
+                <button class="start-btn" id="startBtn" onclick="startGame()">Start Game</button>
+            </div>
+        </div>
+
+        <!-- Virtual Keyboard -->
+        <div class="keyboard-section">
+            <div class="keyboard-label">PartyKeys 36 Keys &mdash; LED Preview</div>
+            <div class="keyboard" id="keyboard"></div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notif" id="notif"></div>
+
+    <script>
+    // ═══════════════════════════════════════
+    // CONSTANTS & CONFIG
+    // ═══════════════════════════════════════
+    const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+    // PartyKeys 36 Keys: C3 to B5 (MIDI notes 48–83)
+    const PK_START = 48;
+    const PK_END = 83;
+
+    const CHORD_TYPES = {
+        'major':[0,4,7], 'minor':[0,3,7], '7':[0,4,7,10], 'maj7':[0,4,7,11],
+        'min7':[0,3,7,10], 'dim':[0,3,6], 'aug':[0,4,8], 'sus4':[0,5,7], 'sus2':[0,2,7]
+    };
+
+    const CHORD_POOLS = {
+        easy: [
+            {name:'C',root:'C',type:'major'},{name:'Dm',root:'D',type:'minor'},
+            {name:'Em',root:'E',type:'minor'},{name:'F',root:'F',type:'major'},
+            {name:'G',root:'G',type:'major'},{name:'Am',root:'A',type:'minor'},
+            {name:'D',root:'D',type:'major'},{name:'E',root:'E',type:'major'}
+        ],
+        medium: [
+            {name:'Cmaj7',root:'C',type:'maj7'},{name:'Dm7',root:'D',type:'min7'},
+            {name:'G7',root:'G',type:'7'},{name:'Am7',root:'A',type:'min7'},
+            {name:'Fmaj7',root:'F',type:'maj7'},{name:'Em7',root:'E',type:'min7'},
+            {name:'Bdim',root:'B',type:'dim'},{name:'D7',root:'D',type:'7'}
+        ],
+        hard: [
+            {name:'Cmaj7',root:'C',type:'maj7'},{name:'Dm7',root:'D',type:'min7'},
+            {name:'G7',root:'G',type:'7'},{name:'Am7',root:'A',type:'min7'},
+            {name:'Caug',root:'C',type:'aug'},{name:'Dsus4',root:'D',type:'sus4'},
+            {name:'Gsus2',root:'G',type:'sus2'},{name:'E7',root:'E',type:'7'},
+            {name:'Bdim',root:'B',type:'dim'},{name:'F#dim',root:'F#',type:'dim'}
+        ]
+    };
+
+    // ─── Stone tiers: determines size, damage, HP reward, color ring ───
+    const STONE_TIERS = {
+        // type → { damage, hpReward, shieldReward, label, ringColor }
+        'major':  { damage: 8,  hpReward: 5,  shieldReward: 0, label: 'Common',    ringColor: '#60a5fa' },
+        'minor':  { damage: 8,  hpReward: 5,  shieldReward: 0, label: 'Common',    ringColor: '#60a5fa' },
+        '7':      { damage: 14, hpReward: 10, shieldReward: 2, label: 'Strong',    ringColor: '#fbbf24' },
+        'maj7':   { damage: 14, hpReward: 10, shieldReward: 2, label: 'Strong',    ringColor: '#fbbf24' },
+        'min7':   { damage: 14, hpReward: 10, shieldReward: 2, label: 'Strong',    ringColor: '#fbbf24' },
+        'dim':    { damage: 20, hpReward: 18, shieldReward: 5, label: 'Elite',     ringColor: '#f472b6' },
+        'aug':    { damage: 20, hpReward: 18, shieldReward: 5, label: 'Elite',     ringColor: '#f472b6' },
+        'sus4':   { damage: 12, hpReward: 8,  shieldReward: 3, label: 'Tricky',    ringColor: '#a78bfa' },
+        'sus2':   { damage: 12, hpReward: 8,  shieldReward: 3, label: 'Tricky',    ringColor: '#a78bfa' }
+    };
+
+    // ═══════════════════════════════════════
+    // GAME STATE
+    // ═══════════════════════════════════════
+    let game = {
+        running: false,
+        paused: false,
+        practiceMode: false,
+        score: 0,
+        combo: 0,
+        maxCombo: 0,
+        hp: 100,
+        maxHp: 100,
+        shield: 0,
+        maxShield: 50,
+        level: 1,
+        destroyed: 0,
+        difficulty: 'easy',
+        stones: [],
+        particles: [],
+        floatingTexts: [],
+        planeY: 180,
+        planeTargetY: 180,
+        pressedNotes: new Set(),
+        pressedMidi: new Set(),
+        lastSpawn: 0,
+        spawnInterval: 2800,
+        stoneSpeed: 1.2,
+        animFrame: null,
+        starField: [],
+        frameCount: 0,
+        // HP regen: passive slow regen
+        hpRegenTimer: 0,
+        hpRegenInterval: 180, // frames (~3s at 60fps)
+        hpRegenAmount: 1,
+        // Damage flash
+        damageFlash: 0,
+        healFlash: 0,
+        shieldFlash: 0,
+        // Invincibility frames after taking damage
+        iFrames: 0,
+        // Combo healing bonus threshold
+        comboHealAt: 5 // every 5 combo, bonus heal
+    };
+
+    // MIDI
+    let midiAccess = null;
+    let midiOutput = null;
+    let midiInputConnected = false;
+
+    // Audio
+    let audioCtx = null;
+    let masterGain = null;     // final output
+    let bgmGain = null;        // background music bus
+    let sfxGain = null;        // arpeggio / destroy SFX bus
+    let keysGain = null;       // keyboard note bus
+    let activeNotes = new Map();
+    let allMuted = false;
+
+    // Theme
+    let currentTheme = 'modern';
+
+    // ═══════════════════════════════════════
+    // AUDIO ENGINE — 3-bus mixer
+    // ═══════════════════════════════════════
+    function initAudio() {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 1.0;
+        masterGain.connect(audioCtx.destination);
+
+        bgmGain = audioCtx.createGain();
+        bgmGain.gain.value = 0.4;
+        bgmGain.connect(masterGain);
+
+        sfxGain = audioCtx.createGain();
+        sfxGain.gain.value = 0.6;
+        sfxGain.connect(masterGain);
+
+        keysGain = audioCtx.createGain();
+        keysGain.gain.value = 0.5;
+        keysGain.connect(masterGain);
+    }
+
+    function setBGMVolume(v)  { if (bgmGain)  bgmGain.gain.value  = v / 100; }
+    function setSFXVolume(v)  { if (sfxGain)  sfxGain.gain.value  = v / 100; }
+    function setKeysVolume(v) { if (keysGain) keysGain.gain.value = v / 100; }
+    function toggleMuteAll() {
+        allMuted = !allMuted;
+        if (masterGain) masterGain.gain.value = allMuted ? 0 : 1;
+        const btn = document.getElementById('muteAllBtn');
+        btn.textContent = allMuted ? 'Unmute' : 'Mute All';
+        btn.classList.toggle('muted', allMuted);
+    }
+
+    function noteToFreq(noteName, octave) {
+        const semi = NOTE_NAMES.indexOf(noteName);
+        if (semi < 0) return 440;
+        return 440 * Math.pow(2, ((octave - 4) * 12 + semi - 9) / 12);
+    }
+
+    function midiToFreq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    // ─── Keyboard note playback (routed to keysGain) ───
+    function playMidiNote(midiNum) {
+        initAudio();
+        const freq = midiToFreq(midiNum);
+        if (activeNotes.has(midiNum)) return;
+
+        const osc = audioCtx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = freq * 2;
+
+        const g = audioCtx.createGain();
+        const now = audioCtx.currentTime;
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.22, now + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.10, now + 0.2);
+
+        osc.connect(g); osc2.connect(g); g.connect(keysGain);
+        osc.start(now); osc2.start(now);
+        activeNotes.set(midiNum, { osc, osc2, g });
+    }
+
+    function stopMidiNote(midiNum) {
+        if (!audioCtx) return;
+        const data = activeNotes.get(midiNum);
+        if (!data) return;
+        const now = audioCtx.currentTime;
+        try {
+            data.g.gain.cancelScheduledValues(now);
+            data.g.gain.setValueAtTime(data.g.gain.value, now);
+            data.g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+            data.osc.stop(now + 0.06); data.osc2.stop(now + 0.06);
+        } catch(e) {}
+        activeNotes.delete(midiNum);
+    }
+
+    // ═══════════════════════════════════════
+    // BACKGROUND MUSIC — Procedural ambient in C major
+    // ═══════════════════════════════════════
+    // Chord progression: I → V → vi → IV (C → G → Am → F) repeating
+    // Each chord lasts ~4s (= one bar at ~60 BPM)
+    // Layers: bass drone + pad chord + gentle arpeggio shimmer
+    const BGM_PROGRESSION = [
+        { root: 'C', type: 'major', bass: 48 },   // C3
+        { root: 'G', type: 'major', bass: 43 },   // G2
+        { root: 'A', type: 'minor', bass: 45 },   // A2
+        { root: 'F', type: 'major', bass: 41 }    // F2
+    ];
+    const BGM_BAR_DURATION = 4.0; // seconds per chord
+    let bgmPlaying = false;
+    let bgmScheduleTimer = null;
+    let bgmBarIndex = 0;
+    let bgmNodes = []; // track all bgm oscillators for cleanup
+
+    function startBGM() {
+        if (!audioCtx || bgmPlaying) return;
+        bgmPlaying = true;
+        bgmBarIndex = 0;
+        scheduleBGMBar();
+    }
+
+    function stopBGM() {
+        bgmPlaying = false;
+        clearTimeout(bgmScheduleTimer);
+        // Fade out all bgm nodes
+        const now = audioCtx ? audioCtx.currentTime : 0;
+        bgmNodes.forEach(n => {
+            try {
+                if (n.g) {
+                    n.g.gain.cancelScheduledValues(now);
+                    n.g.gain.setValueAtTime(n.g.gain.value, now);
+                    n.g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                }
+                if (n.osc) n.osc.stop(now + 0.6);
+            } catch(e) {}
+        });
+        bgmNodes = [];
+    }
+
+    function scheduleBGMBar() {
+        if (!bgmPlaying || !audioCtx) return;
+        const chord = BGM_PROGRESSION[bgmBarIndex % BGM_PROGRESSION.length];
+        const now = audioCtx.currentTime;
+        const dur = BGM_BAR_DURATION;
+
+        // ── Layer 1: Bass drone ──
+        playBGMBass(chord.bass, now, dur);
+
+        // ── Layer 2: Pad chord (soft sustained) ──
+        const padNotes = chordToMidiNotes(chord, 4); // octave 4
+        padNotes.forEach((midi, i) => {
+            playBGMPad(midi, now + i * 0.05, dur);
+        });
+
+        // ── Layer 3: Gentle shimmer arpeggio (quiet, rhythmic) ──
+        const arpNotes = chordToMidiNotes(chord, 5); // octave 5
+        const arpStep = dur / (arpNotes.length * 2);
+        for (let rep = 0; rep < 2; rep++) {
+            arpNotes.forEach((midi, i) => {
+                const t = now + rep * (dur / 2) + i * arpStep;
+                playBGMShimmer(midi, t, arpStep * 0.8);
+            });
+        }
+
+        bgmBarIndex++;
+
+        // Schedule next bar
+        bgmScheduleTimer = setTimeout(() => scheduleBGMBar(), dur * 1000);
+    }
+
+    function chordToMidiNotes(chord, octave) {
+        const rootIdx = NOTE_NAMES.indexOf(chord.root);
+        return CHORD_TYPES[chord.type].map(i => (octave + 1) * 12 + ((rootIdx + i) % 12));
+    }
+
+    function playBGMBass(midi, startTime, dur) {
+        const freq = midiToFreq(midi);
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+
+        // Sub-octave layer for warmth
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = freq * 0.5;
+
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0, startTime);
+        g.gain.linearRampToValueAtTime(0.18, startTime + 0.3);
+        g.gain.setValueAtTime(0.18, startTime + dur - 0.4);
+        g.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+        // Low-pass filter for smooth bass
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 200;
+
+        osc.connect(filter); osc2.connect(filter);
+        filter.connect(g); g.connect(bgmGain);
+        osc.start(startTime); osc2.start(startTime);
+        osc.stop(startTime + dur + 0.1); osc2.stop(startTime + dur + 0.1);
+        bgmNodes.push({ osc, g });
+    }
+
+    function playBGMPad(midi, startTime, dur) {
+        const freq = midiToFreq(midi);
+
+        // Detuned pair for chorus/pad effect
+        const osc1 = audioCtx.createOscillator();
+        osc1.type = 'sine';
+        osc1.frequency.value = freq;
+        osc1.detune.value = -8;
+
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.value = freq;
+        osc2.detune.value = 8;
+
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0, startTime);
+        g.gain.linearRampToValueAtTime(0.06, startTime + 0.8);
+        g.gain.setValueAtTime(0.06, startTime + dur - 0.8);
+        g.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+        // Gentle filter
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 2000;
+        filter.Q.value = 0.5;
+
+        osc1.connect(filter); osc2.connect(filter);
+        filter.connect(g); g.connect(bgmGain);
+        osc1.start(startTime); osc2.start(startTime);
+        osc1.stop(startTime + dur + 0.2); osc2.stop(startTime + dur + 0.2);
+        bgmNodes.push({ osc: osc1, g });
+    }
+
+    function playBGMShimmer(midi, startTime, dur) {
+        const freq = midiToFreq(midi);
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0, startTime);
+        g.gain.linearRampToValueAtTime(0.025, startTime + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+        osc.connect(g); g.connect(bgmGain);
+        osc.start(startTime); osc.stop(startTime + dur + 0.05);
+        bgmNodes.push({ osc, g });
+    }
+
+    // ═══════════════════════════════════════
+    // ARPEGGIO SFX — Plays on stone destroy
+    // ═══════════════════════════════════════
+    // Rising arpeggio of the destroyed chord, bell-like timbre
+    // Played through sfxGain bus, harmonizes naturally since it IS the chord
+    function playDestroyArpeggio(chord) {
+        if (!audioCtx) return;
+        const rootIdx = NOTE_NAMES.indexOf(chord.root);
+        const intervals = CHORD_TYPES[chord.type];
+
+        // Build arpeggio: chord tones ascending across 2 octaves + root on top
+        const midiNotes = [];
+        intervals.forEach(i => midiNotes.push(60 + ((rootIdx + i) % 12))); // octave 4
+        intervals.forEach(i => midiNotes.push(72 + ((rootIdx + i) % 12))); // octave 5
+        midiNotes.push(84 + rootIdx); // root at octave 6 (sparkle top)
+
+        const now = audioCtx.currentTime;
+        const noteGap = 0.07; // 70ms between each note — fast sparkly arpeggio
+        const noteDur = 0.6;  // each note rings for 600ms
+
+        midiNotes.forEach((midi, i) => {
+            const t = now + i * noteGap;
+            const freq = midiToFreq(midi);
+
+            // Bell-like: sine fundamental + quiet 2nd and 3rd partials
+            const osc1 = audioCtx.createOscillator();
+            osc1.type = 'sine';
+            osc1.frequency.value = freq;
+
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = 'sine';
+            osc2.frequency.value = freq * 2;
+
+            const osc3 = audioCtx.createOscillator();
+            osc3.type = 'sine';
+            osc3.frequency.value = freq * 3;
+
+            const g1 = audioCtx.createGain();
+            const g2 = audioCtx.createGain();
+            const g3 = audioCtx.createGain();
+
+            // Fundamental: bright attack, gentle decay
+            const vol = 0.12 * (1 - i * 0.01); // slightly quieter as it goes up
+            g1.gain.setValueAtTime(0, t);
+            g1.gain.linearRampToValueAtTime(vol, t + 0.008);
+            g1.gain.exponentialRampToValueAtTime(0.001, t + noteDur);
+
+            // 2nd partial: quieter
+            g2.gain.setValueAtTime(0, t);
+            g2.gain.linearRampToValueAtTime(vol * 0.3, t + 0.008);
+            g2.gain.exponentialRampToValueAtTime(0.001, t + noteDur * 0.6);
+
+            // 3rd partial: even quieter, decays faster
+            g3.gain.setValueAtTime(0, t);
+            g3.gain.linearRampToValueAtTime(vol * 0.1, t + 0.008);
+            g3.gain.exponentialRampToValueAtTime(0.001, t + noteDur * 0.3);
+
+            osc1.connect(g1); g1.connect(sfxGain);
+            osc2.connect(g2); g2.connect(sfxGain);
+            osc3.connect(g3); g3.connect(sfxGain);
+
+            osc1.start(t); osc2.start(t); osc3.start(t);
+            osc1.stop(t + noteDur + 0.05);
+            osc2.stop(t + noteDur + 0.05);
+            osc3.stop(t + noteDur + 0.05);
+        });
+    }
+
+    // Dissonant crash sound for stone hitting the plane
+    function playDamageSound() {
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+
+        // Noise-like burst using detuned oscillators
+        const freqs = [180, 227, 310, 415]; // dissonant cluster
+        freqs.forEach(freq => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq + (Math.random() - 0.5) * 30;
+
+            const g = audioCtx.createGain();
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(0.08, now + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 800;
+
+            osc.connect(filter); filter.connect(g); g.connect(sfxGain);
+            osc.start(now); osc.stop(now + 0.3);
+        });
+    }
+
+    // ═══════════════════════════════════════
+    // MIDI CONNECTION & LED
+    // ═══════════════════════════════════════
+    async function connectMIDI() {
+        if (!navigator.requestMIDIAccess) { notify('Web MIDI not supported. Use Chrome/Edge.', 'error'); return; }
+        try {
+            midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+            midiAccess.inputs.forEach(input => {
+                if (!midiInputConnected) {
+                    input.onmidimessage = handleMIDIMessage;
+                    midiInputConnected = true;
+                    document.getElementById('deviceName').textContent = input.name;
+                }
+            });
+            midiAccess.outputs.forEach(output => { if (!midiOutput) { midiOutput = output; } });
+
+            if (midiInputConnected) {
+                document.getElementById('statusDot').classList.add('connected');
+                document.getElementById('midiStatusText').textContent = 'MIDI connected';
+                notify('MIDI connected! Ready to play.');
+            } else {
+                notify('No MIDI devices found.', 'error');
+            }
+
+            midiAccess.onstatechange = (e) => {
+                if (e.port.type === 'input' && e.port.state === 'connected' && !midiInputConnected) {
+                    e.port.onmidimessage = handleMIDIMessage;
+                    midiInputConnected = true;
+                    document.getElementById('statusDot').classList.add('connected');
+                    document.getElementById('midiStatusText').textContent = 'MIDI connected';
+                    document.getElementById('deviceName').textContent = e.port.name;
+                    notify('MIDI device connected: ' + e.port.name);
+                }
+                if (e.port.type === 'output' && e.port.state === 'connected' && !midiOutput) midiOutput = e.port;
+            };
+        } catch(err) { notify('MIDI access denied.', 'error'); console.error(err); }
+    }
+
+    // LED Protocol: Note On to MIDI output, velocity = color
+    function setLED(midiNote, color) {
+        if (!midiOutput) return;
+        const colorMap = { off:0, red:10, green:30, blue:50, yellow:70, cyan:90, purple:110, white:125 };
+        const vel = colorMap[color] || 0;
+        midiOutput.send(vel === 0 ? [0x80, midiNote, 0] : [0x90, midiNote, vel]);
+    }
+
+    function clearAllLEDs() {
+        if (!midiOutput) return;
+        for (let n = PK_START; n <= PK_END; n++) midiOutput.send([0x80, n, 0]);
+    }
+
+    function lightUpChordLED(noteNames, color) {
+        noteNames.forEach(name => {
+            const idx = NOTE_NAMES.indexOf(name);
+            if (idx < 0) return;
+            for (let oct = 0; oct < 10; oct++) {
+                const midi = (oct + 1) * 12 + idx;
+                if (midi >= PK_START && midi <= PK_END) setLED(midi, color);
+            }
+        });
+    }
+
+    // ═══════════════════════════════════════
+    // MIDI MESSAGE HANDLER
+    // ═══════════════════════════════════════
+    function handleMIDIMessage(msg) {
+        const [status, note, velocity] = msg.data;
+        const cmd = status & 0xF0;
+        const noteOn = cmd === 0x90 && velocity > 0;
+        const noteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
+        if (!noteOn && !noteOff) return;
+
+        const noteName = NOTE_NAMES[note % 12];
+        if (noteOn) {
+            initAudio();
+            game.pressedNotes.add(noteName);
+            game.pressedMidi.add(note);
+            playMidiNote(note);
+            highlightVirtualKey(noteName, 'led-active');
+            // Move plane
+            const pos = (note - PK_START) / (PK_END - PK_START);
+            game.planeTargetY = 340 - pos * 320;
+            if (game.running) setTimeout(() => checkChordMatch(), 60);
+        } else {
+            game.pressedNotes.delete(noteName);
+            game.pressedMidi.delete(note);
+            stopMidiNote(note);
+            clearVirtualKey(noteName);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // CHORD LOGIC
+    // ═══════════════════════════════════════
+    function chordToNoteNames(chord) {
+        const rootIdx = NOTE_NAMES.indexOf(chord.root);
+        return CHORD_TYPES[chord.type].map(i => NOTE_NAMES[(rootIdx + i) % 12]);
+    }
+
+    function checkChordMatch() {
+        if (!game.running) return;
+        const pressed = game.pressedNotes;
+        for (let i = game.stones.length - 1; i >= 0; i--) {
+            const stone = game.stones[i];
+            if (stone.dying) continue;
+            const required = chordToNoteNames(stone.chord);
+            if (required.every(n => pressed.has(n)) && pressed.size >= required.length) {
+                destroyStone(i);
+                break;
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // HP / DAMAGE / HEALING SYSTEM
+    // ═══════════════════════════════════════
+    function takeDamage(amount, stone) {
+        if (game.iFrames > 0) return; // invincibility active
+        if (game.practiceMode) {
+            // Practice mode: show a harmless indicator and keep going
+            game.iFrames = 20;
+            game.shieldFlash = 10;
+            if (stone) spawnFloatingText(stone.x, stone.y, 'practice', '#34d399');
+            return;
+        }
+
+        let remaining = amount;
+
+        // Shield absorbs damage first
+        if (game.shield > 0) {
+            const absorbed = Math.min(game.shield, remaining);
+            game.shield -= absorbed;
+            remaining -= absorbed;
+            game.shieldFlash = 15;
+            if (absorbed > 0) {
+                spawnFloatingText(stone.x, stone.y, `-${absorbed} shield`, '#818cf8');
+            }
+        }
+
+        // Remaining damage hits HP
+        if (remaining > 0) {
+            game.hp = Math.max(0, game.hp - remaining);
+            game.damageFlash = 20;
+            spawnFloatingText(stone.x, stone.y + 20, `-${remaining} HP`, '#ff6b6b');
+            playDamageSound();
+        }
+
+        // Brief invincibility (30 frames = 0.5s)
+        game.iFrames = 30;
+
+        // Reset combo on damage
+        game.combo = 0;
+
+        updateStats();
+
+        if (game.hp <= 0) {
+            endGame();
+        }
+    }
+
+    function healHP(amount, x, y) {
+        const actualHeal = Math.min(amount, game.maxHp - game.hp);
+        if (actualHeal > 0) {
+            game.hp += actualHeal;
+            game.healFlash = 15;
+            spawnFloatingText(x, y, `+${actualHeal} HP`, '#4ade80');
+        }
+    }
+
+    function addShield(amount, x, y) {
+        const actualAdd = Math.min(amount, game.maxShield - game.shield);
+        if (actualAdd > 0) {
+            game.shield += actualAdd;
+            game.shieldFlash = 12;
+            spawnFloatingText(x, y - 16, `+${actualAdd} Shield`, '#a78bfa');
+        }
+    }
+
+    function destroyStone(idx) {
+        const stone = game.stones[idx];
+        stone.dying = true;
+        stone.deathTimer = 30;
+
+        const tier = STONE_TIERS[stone.chord.type] || STONE_TIERS['major'];
+
+        // Score
+        const baseScore = tier.hpReward >= 15 ? 300 : tier.hpReward >= 10 ? 200 : 100;
+        game.combo++;
+        if (game.combo > game.maxCombo) game.maxCombo = game.combo;
+        const comboMult = Math.min(game.combo, 10);
+        game.score += baseScore * comboMult;
+        game.destroyed++;
+
+        // HP reward from destroying stone
+        healHP(tier.hpReward, stone.x, stone.y - 30);
+
+        // Shield reward
+        if (tier.shieldReward > 0) {
+            addShield(tier.shieldReward, stone.x, stone.y - 50);
+        }
+
+        // Combo milestone bonus: every 5 combo, big heal
+        if (game.combo > 0 && game.combo % game.comboHealAt === 0) {
+            const bonusHeal = 15;
+            healHP(bonusHeal, stone.x - 30, stone.y - 60);
+            notify(`${game.combo}x Combo! Bonus heal +${bonusHeal}`, 'heal');
+        }
+
+        // Play arpeggio SFX
+        playDestroyArpeggio(stone.chord);
+
+        // Particles
+        spawnParticles(stone.x, stone.y, stone.color, 20);
+
+        // Flash keyboard green + LED
+        const notes = chordToNoteNames(stone.chord);
+        notes.forEach(n => highlightVirtualKey(n, 'led-active'));
+        lightUpChordLED(notes, 'green');
+        setTimeout(() => {
+            notes.forEach(n => clearVirtualKey(n));
+            lightUpChordLED(notes, 'off');
+        }, 400);
+
+        // Score floating text
+        spawnFloatingText(stone.x + 20, stone.y, `+${baseScore * comboMult}`, '#ffd166');
+
+        updateStats();
+
+        // Level up every 8 destroys
+        if (game.destroyed % 8 === 0) {
+            game.level++;
+            game.spawnInterval = Math.max(1000, game.spawnInterval - 180);
+            game.stoneSpeed = Math.min(3.5, game.stoneSpeed + 0.18);
+            // Level up bonus: increase max HP slightly
+            game.maxHp = Math.min(150, game.maxHp + 5);
+            game.maxShield = Math.min(80, game.maxShield + 5);
+            healHP(10, 530, 190);
+            notify(`Level ${game.level}! Max HP +5`);
+            updateStats();
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // FLOATING TEXT
+    // ═══════════════════════════════════════
+    function spawnFloatingText(x, y, text, color) {
+        game.floatingTexts.push({
+            x, y, text, color,
+            life: 50,
+            vy: -1.5
+        });
+    }
+
+    // ═══════════════════════════════════════
+    // VIRTUAL KEYBOARD
+    // ═══════════════════════════════════════
+    function buildKeyboard() {
+        const kb = document.getElementById('keyboard');
+        kb.innerHTML = '';
+        for (let midi = PK_START; midi <= PK_END; midi++) {
+            const noteIdx = midi % 12;
+            const noteName = NOTE_NAMES[noteIdx];
+            const isBlack = [1,3,6,8,10].includes(noteIdx);
+            const key = document.createElement('div');
+            key.className = `key ${isBlack ? 'black' : 'white'}`;
+            key.dataset.midi = midi;
+            key.dataset.noteName = noteName;
+            const label = document.createElement('span');
+            label.className = 'key-label';
+            label.textContent = noteName;
+            key.appendChild(label);
+            key.addEventListener('mousedown', () => {
+                initAudio();
+                game.pressedNotes.add(noteName);
+                game.pressedMidi.add(midi);
+                playMidiNote(midi);
+                highlightVirtualKey(noteName, 'led-active');
+                const pos = (midi - PK_START) / (PK_END - PK_START);
+                game.planeTargetY = 340 - pos * 320;
+                if (game.running) setTimeout(() => checkChordMatch(), 60);
+            });
+            key.addEventListener('mouseup', () => {
+                game.pressedNotes.delete(noteName);
+                game.pressedMidi.delete(midi);
+                stopMidiNote(midi);
+                clearVirtualKey(noteName);
+            });
+            kb.appendChild(key);
+        }
+    }
+
+    function highlightVirtualKey(noteName, cls) {
+        document.querySelectorAll('.key').forEach(k => {
+            if (k.dataset.noteName === noteName) {
+                k.classList.remove('led-hint','led-active','led-danger');
+                k.classList.add(cls);
+            }
+        });
+    }
+    function clearVirtualKey(noteName) {
+        document.querySelectorAll('.key').forEach(k => {
+            if (k.dataset.noteName === noteName) k.classList.remove('led-hint','led-active','led-danger');
+        });
+    }
+    function clearAllVirtualKeys() {
+        document.querySelectorAll('.key').forEach(k => k.classList.remove('led-hint','led-active','led-danger'));
+    }
+
+    // ═══════════════════════════════════════
+    // PARTICLES
+    // ═══════════════════════════════════════
+    function spawnParticles(x, y, color, count) {
+        for (let i = 0; i < count; i++) {
+            game.particles.push({
+                x, y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                life: 30 + Math.random() * 20,
+                maxLife: 50,
+                size: 2 + Math.random() * 4,
+                color
+            });
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // STAR FIELD
+    // ═══════════════════════════════════════
+    function initStarField() {
+        game.starField = [];
+        for (let i = 0; i < 80; i++) {
+            game.starField.push({
+                x: Math.random() * 1060, y: Math.random() * 380,
+                size: Math.random() * 2 + 0.5, speed: Math.random() * 0.5 + 0.2,
+                brightness: Math.random()
+            });
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // GAME LOOP
+    // ═══════════════════════════════════════
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function startGame() {
+        initAudio();
+        game.running = true;
+        game.paused = false;
+        document.getElementById('pauseBanner').classList.remove('visible');
+        document.getElementById('pauseBtn').disabled = false;
+        document.getElementById('pauseBtn').classList.remove('paused');
+        document.getElementById('pauseBtn').innerHTML = 'Pause <span class="kbd">Space</span>';
+        document.getElementById('restartBtn').disabled = false;
+        game.score = 0;
+        game.combo = 0;
+        game.maxCombo = 0;
+        game.hp = 100;
+        game.maxHp = 100;
+        game.shield = 0;
+        game.maxShield = 50;
+        game.level = 1;
+        game.destroyed = 0;
+        game.stones = [];
+        game.particles = [];
+        game.floatingTexts = [];
+        game.planeY = 180;
+        game.planeTargetY = 180;
+        game.lastSpawn = performance.now();
+        game.spawnInterval = game.difficulty === 'easy' ? 3000 : game.difficulty === 'medium' ? 2400 : 1800;
+        game.stoneSpeed = game.difficulty === 'easy' ? 1.0 : game.difficulty === 'medium' ? 1.4 : 1.8;
+        game.frameCount = 0;
+        game.damageFlash = 0;
+        game.healFlash = 0;
+        game.shieldFlash = 0;
+        game.iFrames = 0;
+        game.hpRegenTimer = 0;
+        game.pausedAt = null;
+
+        // Update practice badge in case mode was toggled before starting
+        document.getElementById('practiceBadge').classList.toggle('visible', game.practiceMode);
+
+        initStarField();
+        clearAllLEDs();
+        clearAllVirtualKeys();
+        updateStats();
+
+        // Start background music
+        stopBGM();
+        startBGM();
+
+        document.getElementById('gameOverlay').classList.add('hidden');
+        if (game.animFrame) cancelAnimationFrame(game.animFrame);
+        gameLoop();
+    }
+
+    function gameLoop() {
+        if (!game.running) return;
+        if (!game.paused) {
+            game.frameCount++;
+            update();
+        }
+        render();
+        game.animFrame = requestAnimationFrame(gameLoop);
+    }
+
+    function update() {
+        const now = performance.now();
+
+        // Spawn stones
+        if (now - game.lastSpawn > game.spawnInterval) {
+            spawnStone();
+            game.lastSpawn = now;
+        }
+
+        // Plane movement
+        game.planeY += (game.planeTargetY - game.planeY) * 0.08;
+        game.planeY = Math.max(20, Math.min(350, game.planeY));
+
+        // Invincibility countdown
+        if (game.iFrames > 0) game.iFrames--;
+
+        // Damage/heal flash
+        if (game.damageFlash > 0) game.damageFlash--;
+        if (game.healFlash > 0) game.healFlash--;
+        if (game.shieldFlash > 0) game.shieldFlash--;
+
+        // Passive HP regen
+        game.hpRegenTimer++;
+        if (game.hpRegenTimer >= game.hpRegenInterval && game.hp < game.maxHp && game.hp > 0) {
+            game.hp = Math.min(game.maxHp, game.hp + game.hpRegenAmount);
+            game.hpRegenTimer = 0;
+            updateStats();
+        }
+
+        // Update stones
+        for (let i = game.stones.length - 1; i >= 0; i--) {
+            const s = game.stones[i];
+            if (s.dying) {
+                s.deathTimer--;
+                s.scale = s.deathTimer / 30;
+                if (s.deathTimer <= 0) game.stones.splice(i, 1);
+                continue;
+            }
+
+            s.x -= game.stoneSpeed;
+            s.wobble = Math.sin(game.frameCount * 0.03 + s.wobbleOffset) * 8;
+
+            // Stone reaches danger zone → deal damage
+            if (s.x < 80) {
+                const tier = STONE_TIERS[s.chord.type] || STONE_TIERS['major'];
+                takeDamage(tier.damage, s);
+
+                // Flash keyboard red
+                const notes = chordToNoteNames(s.chord);
+                notes.forEach(n => highlightVirtualKey(n, 'led-danger'));
+                lightUpChordLED(notes, 'red');
+                setTimeout(() => {
+                    notes.forEach(n => clearVirtualKey(n));
+                    lightUpChordLED(notes, 'off');
+                }, 500);
+
+                spawnParticles(s.x, s.y + s.wobble, '#ff4444', 12);
+                game.stones.splice(i, 1);
+                updateStats();
+
+                if (game.hp <= 0) return;
+                continue;
+            }
+
+            // Hint: light up keyboard when stone is mid-screen
+            if (s.x < 450 && s.x > 380 && !s.hinted) {
+                s.hinted = true;
+                const notes = chordToNoteNames(s.chord);
+                notes.forEach(n => highlightVirtualKey(n, 'led-hint'));
+                lightUpChordLED(notes, 'blue');
+            }
+            if (s.x < 180 && s.hinted && !s.urgentHinted) {
+                s.urgentHinted = true;
+                const notes = chordToNoteNames(s.chord);
+                notes.forEach(n => highlightVirtualKey(n, 'led-danger'));
+                lightUpChordLED(notes, 'yellow');
+            }
+        }
+
+        // Update particles
+        for (let i = game.particles.length - 1; i >= 0; i--) {
+            const p = game.particles[i];
+            p.x += p.vx; p.y += p.vy;
+            p.vx *= 0.96; p.vy *= 0.96;
+            p.life--;
+            if (p.life <= 0) game.particles.splice(i, 1);
+        }
+
+        // Update floating texts
+        for (let i = game.floatingTexts.length - 1; i >= 0; i--) {
+            const ft = game.floatingTexts[i];
+            ft.y += ft.vy;
+            ft.life--;
+            if (ft.life <= 0) game.floatingTexts.splice(i, 1);
+        }
+
+        // Update stars
+        game.starField.forEach(s => { s.x -= s.speed; if (s.x < 0) { s.x = 1060; s.y = Math.random() * 380; } });
+    }
+
+    function spawnStone() {
+        const pool = CHORD_POOLS[game.difficulty];
+        const chord = pool[Math.floor(Math.random() * pool.length)];
+        const tier = STONE_TIERS[chord.type] || STONE_TIERS['major'];
+        const colors = ['#ff6b6b','#ffd166','#06d6a0','#118ab2','#ef476f','#fca311','#8338ec','#3a86a7'];
+        const y = 40 + Math.random() * 280;
+        const sizeBonus = tier.damage >= 20 ? 12 : tier.damage >= 14 ? 6 : 0;
+
+        game.stones.push({
+            x: 1080, y,
+            chord,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: 36 + Math.random() * 8 + sizeBonus,
+            wobbleOffset: Math.random() * Math.PI * 2,
+            wobble: 0,
+            dying: false, deathTimer: 0, scale: 1,
+            rotation: Math.random() * Math.PI * 2,
+            rotSpeed: (Math.random() - 0.5) * 0.04,
+            hinted: false, urgentHinted: false,
+            tier
+        });
+    }
+
+    function endGame() {
+        game.running = false;
+        game.paused = false;
+        document.getElementById('pauseBanner').classList.remove('visible');
+        document.getElementById('pauseBtn').disabled = true;
+        document.getElementById('pauseBtn').classList.remove('paused');
+        document.getElementById('pauseBtn').innerHTML = 'Pause <span class="kbd">Space</span>';
+        document.getElementById('restartBtn').disabled = true;
+        stopBGM();
+        clearAllLEDs();
+        clearAllVirtualKeys();
+
+        const overlay = document.getElementById('gameOverlay');
+        overlay.classList.remove('hidden');
+        document.getElementById('overlayTitle').textContent = 'Game Over';
+        document.getElementById('overlaySub').innerHTML = `
+            <div class="game-over-stats">
+                Score: <b>${game.score}</b><br>
+                Chords destroyed: <b>${game.destroyed}</b><br>
+                Max combo: <b>${game.maxCombo}</b><br>
+                Level reached: <b>${game.level}</b><br>
+                Max HP reached: <b>${game.maxHp}</b>
+            </div>`;
+        document.getElementById('startBtn').textContent = 'Play Again';
+    }
+
+    // ═══════════════════════════════════════
+    // RENDERING
+    // ═══════════════════════════════════════
+    function render() {
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        // Background
+        if (currentTheme === 'retro') {
+            ctx.fillStyle = '#0a0a12';
+            ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = 'rgba(0,255,136,0.03)';
+            for (let y = 0; y < H; y += 3) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+            ctx.strokeStyle = 'rgba(0,255,136,0.15)'; ctx.lineWidth = 1;
+            for (let x = (game.frameCount * 1.5) % 60; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, H - 40); ctx.lineTo(x, H); ctx.stroke(); }
+            for (let y = H - 40; y <= H; y += 10) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        } else if (currentTheme === 'cartoon') {
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, '#1a1a40'); grad.addColorStop(1, '#2d1b69');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            for (let i = 0; i < 5; i++) {
+                const cx = ((game.frameCount * 0.3 + i * 230) % (W + 200)) - 100;
+                const cy = 40 + i * 55;
+                ctx.beginPath(); ctx.ellipse(cx, cy, 60, 25, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(cx + 30, cy - 10, 40, 20, 0, 0, Math.PI * 2); ctx.fill();
+            }
+        } else {
+            const grad = ctx.createLinearGradient(0, 0, W, H);
+            grad.addColorStop(0, '#0f172a'); grad.addColorStop(1, '#1e293b');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+        }
+
+        // Stars
+        game.starField.forEach(s => {
+            const alpha = 0.3 + Math.sin(game.frameCount * 0.02 + s.brightness * 10) * 0.3;
+            ctx.fillStyle = currentTheme === 'retro' ? `rgba(0,255,136,${alpha})`
+                : currentTheme === 'cartoon' ? `rgba(255,209,102,${alpha})`
+                : `rgba(200,220,255,${alpha})`;
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // Damage flash overlay
+        if (game.damageFlash > 0) {
+            ctx.fillStyle = `rgba(255,60,60,${game.damageFlash / 60})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        if (game.healFlash > 0) {
+            ctx.fillStyle = `rgba(60,255,120,${game.healFlash / 80})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+
+        // ─── HP BAR (top of canvas) ───
+        drawHPBar(ctx, W);
+
+        // Draw stones
+        game.stones.forEach(s => {
+            const sy = s.y + s.wobble;
+            ctx.save();
+            ctx.translate(s.x, sy);
+            ctx.rotate(s.rotation + game.frameCount * s.rotSpeed);
+            ctx.scale(s.scale, s.scale);
+
+            const sz = s.size;
+            const tier = s.tier;
+
+            // Tier ring glow
+            ctx.shadowColor = tier.ringColor;
+            ctx.shadowBlur = 12;
+
+            if (currentTheme === 'retro') {
+                ctx.fillStyle = s.color;
+                ctx.strokeStyle = tier.ringColor;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(0, -sz); ctx.lineTo(sz * 0.7, 0); ctx.lineTo(0, sz); ctx.lineTo(-sz * 0.7, 0);
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+            } else if (currentTheme === 'cartoon') {
+                const g = ctx.createRadialGradient(0, -sz * 0.2, sz * 0.1, 0, 0, sz);
+                g.addColorStop(0, '#fff'); g.addColorStop(0.3, s.color); g.addColorStop(1, '#333');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(0, 0, sz, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = tier.ringColor; ctx.lineWidth = 3; ctx.stroke();
+                // Eyes
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(-sz * 0.3, -sz * 0.2, sz * 0.2, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(sz * 0.3, -sz * 0.2, sz * 0.2, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath(); ctx.arc(-sz * 0.25, -sz * 0.2, sz * 0.1, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(sz * 0.35, -sz * 0.2, sz * 0.1, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(0, sz * 0.15, sz * 0.25, 0, Math.PI); ctx.stroke();
+            } else {
+                const g = ctx.createRadialGradient(-sz * 0.2, -sz * 0.2, 0, 0, 0, sz);
+                g.addColorStop(0, '#fff'); g.addColorStop(0.2, s.color); g.addColorStop(1, 'rgba(0,0,0,0.6)');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                for (let a = 0; a < Math.PI * 2; a += 0.5) {
+                    const r = sz * (0.7 + Math.sin(a * 3 + s.wobbleOffset) * 0.3);
+                    a === 0 ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                }
+                ctx.closePath(); ctx.fill();
+                // Tier ring
+                ctx.strokeStyle = tier.ringColor;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            ctx.restore();
+
+            // Labels
+            ctx.save();
+            ctx.translate(s.x, sy);
+            ctx.scale(s.scale, s.scale);
+            ctx.fillStyle = '#fff';
+            ctx.font = currentTheme === 'retro' ? 'bold 14px "Courier New"'
+                : currentTheme === 'cartoon' ? 'bold 16px "Comic Sans MS", cursive'
+                : 'bold 14px "Segoe UI"';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3;
+            const labelY = currentTheme === 'cartoon' ? sz * 0.45 : 0;
+            ctx.strokeText(s.chord.name, 0, labelY);
+            ctx.fillText(s.chord.name, 0, labelY);
+
+            // Tier label + damage indicator
+            ctx.font = '9px "Segoe UI"';
+            ctx.fillStyle = tier.ringColor;
+            ctx.fillText(tier.label + ` (-${tier.damage})`, 0, labelY + 15);
+
+            // Note names
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText(chordToNoteNames(s.chord).join('-'), 0, labelY + 26);
+            ctx.restore();
+        });
+
+        // Plane (with i-frame blink)
+        if (game.iFrames <= 0 || game.frameCount % 4 < 2) {
+            drawPlane(60, game.planeY);
+        }
+
+        // Shield bubble around plane
+        if (game.shield > 0) {
+            const shieldAlpha = 0.15 + (game.shield / game.maxShield) * 0.2;
+            ctx.strokeStyle = `rgba(129,140,248,${shieldAlpha + (game.shieldFlash > 0 ? 0.3 : 0)})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.ellipse(60, game.planeY, 36, 28, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = `rgba(129,140,248,${shieldAlpha * 0.3})`;
+            ctx.beginPath();
+            ctx.ellipse(60, game.planeY, 36, 28, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Particles
+        game.particles.forEach(p => {
+            ctx.globalAlpha = p.life / p.maxLife;
+            ctx.fillStyle = p.color;
+            if (currentTheme === 'retro') {
+                ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+            } else {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        });
+
+        // Floating texts
+        game.floatingTexts.forEach(ft => {
+            const alpha = ft.life / 50;
+            ctx.globalAlpha = alpha;
+            ctx.font = 'bold 13px "Segoe UI"';
+            ctx.fillStyle = ft.color;
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 2;
+            ctx.textAlign = 'center';
+            ctx.strokeText(ft.text, ft.x, ft.y);
+            ctx.fillText(ft.text, ft.x, ft.y);
+            ctx.globalAlpha = 1;
+        });
+
+        // Danger zone line
+        ctx.strokeStyle = 'rgba(255,60,60,0.2)';
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.moveTo(80, 0); ctx.lineTo(80, H); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // ─── HP BAR drawn on canvas ───
+    function drawHPBar(ctx, W) {
+        const barX = 12;
+        const barY = 10;
+        const barW = W - 24;
+        const barH = 18;
+        const hpRatio = game.hp / game.maxHp;
+        const shieldRatio = game.shield / game.maxShield;
+
+        // Background
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 6);
+        ctx.fill();
+
+        // HP fill
+        const hpColor = hpRatio > 0.6 ? '#4ade80' : hpRatio > 0.3 ? '#fbbf24' : '#ef4444';
+        const hpGrad = ctx.createLinearGradient(barX, 0, barX + barW * hpRatio, 0);
+        hpGrad.addColorStop(0, hpColor);
+        hpGrad.addColorStop(1, hpRatio > 0.6 ? '#22c55e' : hpRatio > 0.3 ? '#f59e0b' : '#dc2626');
+        ctx.fillStyle = hpGrad;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW * hpRatio, barH, 6);
+        ctx.fill();
+
+        // Damage flash pulse on HP bar
+        if (game.damageFlash > 0) {
+            ctx.fillStyle = `rgba(255,255,255,${game.damageFlash / 40})`;
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, barW * hpRatio, barH, 6);
+            ctx.fill();
+        }
+
+        // Shield overlay (stacked on top of HP, different color)
+        if (game.shield > 0) {
+            const shieldW = barW * (game.shield / game.maxShield) * 0.3; // shield is a smaller overlay section
+            ctx.fillStyle = `rgba(129,140,248,${0.4 + (game.shieldFlash > 0 ? 0.3 : 0)})`;
+            ctx.beginPath();
+            ctx.roundRect(barX + barW * hpRatio - 2, barY, shieldW + 4, barH, 6);
+            ctx.fill();
+        }
+
+        // Border
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 6);
+        ctx.stroke();
+
+        // Text
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px "Segoe UI"';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const hpText = `HP ${game.hp}/${game.maxHp}` + (game.shield > 0 ? `  |  Shield ${game.shield}/${game.maxShield}` : '');
+        ctx.fillText(hpText, W / 2, barY + barH / 2);
+
+        // Low HP warning
+        if (hpRatio <= 0.25 && game.frameCount % 30 < 15) {
+            ctx.fillStyle = 'rgba(255,50,50,0.15)';
+            ctx.fillRect(0, barY + barH + 4, W, 2);
+        }
+    }
+
+    function drawPlane(x, y) {
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (currentTheme === 'retro') {
+            ctx.fillStyle = '#00ff88';
+            ctx.fillRect(0, -4, 28, 8);
+            ctx.fillRect(24, -12, 8, 24);
+            ctx.fillRect(-8, -2, 10, 4);
+            ctx.fillStyle = `rgba(0,255,136,${0.3 + Math.sin(game.frameCount * 0.2) * 0.2})`;
+            ctx.fillRect(-14, -3, 8, 6);
+        } else if (currentTheme === 'cartoon') {
+            ctx.fillStyle = '#ffd166'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(10, 0, 24, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#ef476f';
+            ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(-8, -20); ctx.lineTo(16, -2); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(-8, 20); ctx.lineTo(16, 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#333';
+            const pa = game.frameCount * 0.3;
+            ctx.beginPath(); ctx.ellipse(32, 0, 2, 10 * Math.abs(Math.sin(pa)), 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(18, -3, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(20, -3, 2.5, 0, Math.PI * 2); ctx.fill();
+        } else {
+            const grad = ctx.createLinearGradient(-20, 0, 30, 0);
+            grad.addColorStop(0, '#38bdf8'); grad.addColorStop(1, '#818cf8');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(30, 0); ctx.lineTo(10, -6); ctx.lineTo(-20, -4); ctx.lineTo(-24, 0); ctx.lineTo(-20, 4); ctx.lineTo(10, 6);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = 'rgba(56,189,248,0.7)';
+            ctx.beginPath(); ctx.moveTo(5, -5); ctx.lineTo(-5, -22); ctx.lineTo(-15, -5); ctx.closePath(); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(5, 5); ctx.lineTo(-5, 22); ctx.lineTo(-15, 5); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = `rgba(129,140,248,${0.4 + Math.sin(game.frameCount * 0.15) * 0.3})`;
+            ctx.beginPath(); ctx.ellipse(-28, 0, 8 + Math.sin(game.frameCount * 0.2) * 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.beginPath(); ctx.ellipse(18, -1, 7, 3, -0.1, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // ═══════════════════════════════════════
+    // UI
+    // ═══════════════════════════════════════
+    function updateStats() {
+        document.getElementById('scoreVal').textContent = game.score;
+        document.getElementById('comboVal').textContent = game.combo;
+        document.getElementById('hpVal').textContent = game.hp;
+        document.getElementById('shieldVal').textContent = game.shield;
+        document.getElementById('levelVal').textContent = game.level;
+        document.getElementById('destroyedVal').textContent = game.destroyed;
+    }
+
+    let notifTimer = null;
+    function notify(msg, type) {
+        const el = document.getElementById('notif');
+        el.textContent = msg;
+        el.className = 'notif show' + (type === 'error' ? ' error' : type === 'heal' ? ' heal' : type === 'shield' ? ' shield' : '');
+        clearTimeout(notifTimer);
+        notifTimer = setTimeout(() => el.className = 'notif', 2000);
+    }
+
+    // Theme switching
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentTheme = btn.dataset.theme;
+            document.body.className = `theme-${currentTheme}`;
+        });
+    });
+
+    // Difficulty switching
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            game.difficulty = btn.dataset.diff;
+        });
+    });
+
+    // ═══════════════════════════════════════
+    // PAUSE / RESTART / PRACTICE
+    // ═══════════════════════════════════════
+    function togglePause() {
+        if (!game.running) return;
+        game.paused = !game.paused;
+        const banner = document.getElementById('pauseBanner');
+        const btn = document.getElementById('pauseBtn');
+        if (game.paused) {
+            banner.classList.add('visible');
+            btn.classList.add('paused');
+            btn.innerHTML = 'Resume <span class="kbd">Space</span>';
+            // Freeze spawn timing so stones don't stampede on resume
+            game.pausedAt = performance.now();
+            // Mute BGM bus (keeps audio graph alive but silences music)
+            if (bgmGain && audioCtx) {
+                try {
+                    bgmGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    bgmGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                } catch (e) {}
+            }
+            // Clear held keys visually / on LED so nothing lingers
+            clearAllLEDs();
+            clearAllVirtualKeys();
+            notify('Paused — press Space to resume', 'shield');
+        } else {
+            banner.classList.remove('visible');
+            btn.classList.remove('paused');
+            btn.innerHTML = 'Pause <span class="kbd">Space</span>';
+            // Shift spawn timer forward so no instant spawn on resume
+            if (game.pausedAt) {
+                const delta = performance.now() - game.pausedAt;
+                game.lastSpawn += delta;
+                game.pausedAt = null;
+            }
+            // Restore BGM volume from slider
+            if (bgmGain && audioCtx) {
+                const v = parseInt(document.getElementById('bgmVol').value, 10) / 100;
+                try {
+                    bgmGain.gain.setValueAtTime(allMuted ? 0 : v, audioCtx.currentTime);
+                } catch (e) {}
+            }
+        }
+    }
+
+    function restartGame() {
+        if (game.animFrame) cancelAnimationFrame(game.animFrame);
+        stopBGM();
+        game.running = false;
+        game.paused = false;
+        document.getElementById('pauseBanner').classList.remove('visible');
+        clearAllLEDs();
+        clearAllVirtualKeys();
+        // startGame handles the rest
+        startGame();
+    }
+
+    function togglePractice() {
+        game.practiceMode = !game.practiceMode;
+        const btn = document.getElementById('practiceBtn');
+        const badge = document.getElementById('practiceBadge');
+        if (game.practiceMode) {
+            btn.classList.add('active');
+            badge.classList.add('visible');
+            notify('Practice mode ON — invincible', 'heal');
+        } else {
+            btn.classList.remove('active');
+            badge.classList.remove('visible');
+            notify('Practice mode OFF', 'shield');
+        }
+    }
+
+    // Auto-pause when tab loses focus
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && game.running && !game.paused) {
+            togglePause();
+        }
+    });
+    window.addEventListener('blur', () => {
+        if (game.running && !game.paused) togglePause();
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        // Ignore shortcuts while typing in an input
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+
+        // Movement
+        if (e.key === 'ArrowUp') {
+            if (!game.paused) game.planeTargetY = Math.max(20, game.planeTargetY - 30);
+            e.preventDefault();
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            if (!game.paused) game.planeTargetY = Math.min(350, game.planeTargetY + 30);
+            e.preventDefault();
+            return;
+        }
+
+        // Space: pause/resume
+        if (e.code === 'Space' || e.key === ' ') {
+            if (game.running) {
+                togglePause();
+                e.preventDefault();
+            }
+            return;
+        }
+
+        // R: restart
+        if (e.key === 'r' || e.key === 'R') {
+            if (game.running) {
+                restartGame();
+                e.preventDefault();
+            }
+            return;
+        }
+
+        // P: practice mode toggle
+        if (e.key === 'p' || e.key === 'P') {
+            togglePractice();
+            e.preventDefault();
+            return;
+        }
+
+        // Escape: end game (safe exit)
+        if (e.key === 'Escape') {
+            if (game.running) {
+                if (game.paused) togglePause();
+                endGame();
+                e.preventDefault();
+            }
+            return;
+        }
+    });
+
+    // ═══════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════
+    buildKeyboard();
+    initStarField();
+
+    function idleRender() {
+        if (game.running) return;
+        game.frameCount++;
+        game.starField.forEach(s => { s.x -= s.speed; if (s.x < 0) { s.x = 1060; s.y = Math.random() * 380; } });
+        const W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+        const grad = ctx.createLinearGradient(0, 0, W, H);
+        grad.addColorStop(0, '#0f172a'); grad.addColorStop(1, '#1e293b');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+        game.starField.forEach(s => {
+            const alpha = 0.3 + Math.sin(game.frameCount * 0.02 + s.brightness * 10) * 0.3;
+            ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill();
+        });
+        drawPlane(60, 180 + Math.sin(game.frameCount * 0.02) * 15);
+        requestAnimationFrame(idleRender);
+    }
+    idleRender();
+    connectMIDI();
+    </script>
+</body>
+</html>

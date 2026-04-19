@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Scale Surfer — MIDI Arcade</title>
+<style>
+:root{
+    --bg:#05060f; --card-bg:rgba(15,23,42,0.7); --accent:#38bdf8; --accent2:#34d399;
+    --text:#e2e8f0; --danger:#ef4444; --muted:#64748b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color:var(--text);
+    background: radial-gradient(ellipse at top, #0a1a2e 0%, var(--bg) 60%);
+    min-height:100vh;
+    padding: 20px;
+}
+.container{max-width:1280px;margin:0 auto}
+.header{text-align:center;margin-bottom:14px}
+.header h1{
+    font-size:2.4em; font-weight:900; letter-spacing:-1px;
+    background: linear-gradient(135deg, #38bdf8, #34d399);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.header .sub{color:var(--muted);font-size:0.85em;margin-top:4px}
+
+.midi-bar, .stats-row, .controls-row, .diff-row{
+    display:flex; gap:10px; align-items:center; justify-content:center;
+    flex-wrap:wrap; margin-bottom:10px;
+}
+.midi-bar{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:10px 16px;justify-content:space-between}
+.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;
+    background:#64748b;box-shadow:0 0 8px currentColor;margin-right:6px}
+.status-dot.live{background:#34d399;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.midi-btn{background:var(--accent);color:#fff;border:none;padding:6px 14px;
+    border-radius:8px;cursor:pointer;font-weight:600;font-size:0.82em}
+.midi-btn:hover{filter:brightness(1.1)}
+
+.stat-card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:8px 16px;text-align:center;min-width:80px}
+.stat-val{font-size:1.3em;font-weight:800;color:var(--accent)}
+.stat-label{font-size:0.68em;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+
+.diff-btn, .ctrl-btn{
+    background:var(--card-bg);border:1px solid rgba(255,255,255,0.12);
+    color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;
+    font-size:0.82em;font-weight:600;transition:all 0.2s;
+}
+.diff-btn:hover, .ctrl-btn:hover{background:rgba(255,255,255,0.1)}
+.diff-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border-color:transparent;color:#fff}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed}
+.ctrl-btn.paused{border-color:#fbbf24;color:#fbbf24}
+.ctrl-btn.practice.active{border-color:var(--accent2);color:var(--accent2);background:rgba(52,211,153,0.08)}
+.kbd{display:inline-block;padding:1px 6px;border-radius:4px;
+    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);
+    font-family:ui-monospace,monospace;font-size:0.72em;color:#cbd5e1;margin-left:4px}
+.shortcuts{text-align:center;color:var(--muted);font-size:0.72em;margin-bottom:8px}
+
+.game-wrapper{position:relative;margin-bottom:14px}
+.game-canvas{width:100%;background:#0a1a2e;border-radius:16px;display:block;
+    box-shadow:0 10px 40px rgba(0,0,0,0.5)}
+.game-overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:rgba(5,6,15,0.88);border-radius:16px;padding:30px}
+.game-overlay.hidden{display:none}
+.overlay-title{font-size:2.6em;font-weight:900;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px}
+.overlay-sub{color:#cbd5e1;margin-bottom:20px;font-size:0.95em}
+.start-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#fff;border:none;padding:12px 32px;border-radius:10px;cursor:pointer;
+    font-size:1.1em;font-weight:700;letter-spacing:1px}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(56,189,248,0.4)}
+.pause-banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(15,23,42,0.88);border:2px solid var(--accent);
+    border-radius:16px;padding:22px 44px;text-align:center;display:none;z-index:20}
+.pause-banner.visible{display:block}
+.pause-banner-title{font-size:2.2em;font-weight:800;
+    background:linear-gradient(135deg,#fbbf24,#f472b6);
+    -webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:4px}
+.practice-badge{position:absolute;top:10px;left:10px;
+    background:rgba(52,211,153,0.15);border:1px solid var(--accent2);
+    color:var(--accent2);padding:4px 10px;border-radius:6px;
+    font-size:0.72em;font-weight:700;letter-spacing:1px;display:none;z-index:15}
+.practice-badge.visible{display:block}
+
+.back-link{display:inline-block;color:var(--muted);text-decoration:none;
+    font-size:0.82em;margin-bottom:10px;padding:4px 10px;border-radius:6px}
+.back-link:hover{color:var(--accent);background:rgba(255,255,255,0.05)}
+
+.keyboard-section{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);
+    border-radius:12px;padding:10px;margin-top:10px}
+.keyboard-label{text-align:center;color:var(--muted);font-size:0.78em;margin-bottom:8px}
+.keyboard{display:flex;justify-content:center;position:relative;height:100px}
+.key{position:relative;border:1px solid #334155;transition:all 0.1s}
+.key.white{width:26px;height:100px;background:#e5e7eb;z-index:1}
+.key.black{width:16px;height:62px;background:#0f172a;margin:0 -8px;z-index:2;border-color:#64748b}
+.key.white.led-hint{background:#67e8f9;box-shadow:inset 0 0 15px #0891b2}
+.key.white.led-next{background:#fef3c7;box-shadow:inset 0 0 18px #d97706;animation:nextPulse 0.8s infinite}
+.key.white.led-active{background:#34d399;box-shadow:inset 0 0 15px #059669}
+.key.white.led-danger{background:#fca5a5;box-shadow:inset 0 0 15px #dc2626}
+.key.black.led-hint{background:#0891b2}
+.key.black.led-next{background:#d97706;animation:nextPulse 0.8s infinite}
+.key.black.led-active{background:#059669}
+.key.black.led-danger{background:#dc2626}
+@keyframes nextPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4)}}
+</style>
+</head>
+<body>
+<div class="container">
+    <a class="back-link" href="midi_arcade.html">← Back to Arcade</a>
+    <div class="header">
+        <h1>🏄 Scale Surfer</h1>
+        <div class="sub">Surf the wave by playing scales in order — ascend to rise, descend to dive</div>
+    </div>
+
+    <div class="midi-bar">
+        <div><span class="status-dot" id="statusDot"></span><span id="midiStatusText">MIDI not connected</span></div>
+        <div style="display:flex;gap:8px">
+            <span id="deviceName" style="color:#64748b;font-size:0.8em"></span>
+            <button class="midi-btn" onclick="connectMIDI()">Connect MIDI</button>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="distVal">0 m</div><div class="stat-label">Distance</div></div>
+        <div class="stat-card"><div class="stat-val" id="comboVal">0</div><div class="stat-label">Streak</div></div>
+        <div class="stat-card"><div class="stat-val" id="livesVal">3</div><div class="stat-label">Lives</div></div>
+        <div class="stat-card"><div class="stat-val" id="modeVal">Ionian</div><div class="stat-label">Mode</div></div>
+        <div class="stat-card"><div class="stat-val" id="rootVal">C</div><div class="stat-label">Root</div></div>
+    </div>
+
+    <div class="diff-row">
+        <button class="diff-btn active" data-diff="easy">Easy · Major only</button>
+        <button class="diff-btn" data-diff="medium">Medium · Major + Minor</button>
+        <button class="diff-btn" data-diff="hard">Hard · All 7 Modes</button>
+    </div>
+
+    <div class="controls-row">
+        <button class="ctrl-btn" id="pauseBtn" onclick="togglePause()" disabled>Pause<span class="kbd">Space</span></button>
+        <button class="ctrl-btn" id="restartBtn" onclick="restartGame()" disabled>Restart<span class="kbd">R</span></button>
+        <button class="ctrl-btn practice" id="practiceBtn" onclick="togglePractice()">Practice<span class="kbd">P</span></button>
+    </div>
+    <div class="shortcuts">
+        <span class="kbd">Space</span> Pause
+        <span class="kbd">R</span> Restart
+        <span class="kbd">P</span> Practice
+        <span class="kbd">Esc</span> Quit
+        &emsp;·&emsp; Play the highlighted notes in order
+    </div>
+
+    <div class="game-wrapper">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="440"></canvas>
+        <div class="pause-banner" id="pauseBanner">
+            <div class="pause-banner-title">PAUSED</div>
+            <div style="color:#cbd5e1;font-size:0.85em">Press <b>Space</b> to resume</div>
+        </div>
+        <div class="practice-badge" id="practiceBadge">PRACTICE MODE</div>
+        <div class="game-overlay" id="gameOverlay">
+            <div class="overlay-title" id="overlayTitle">Scale Surfer</div>
+            <div class="overlay-sub" id="overlaySub">
+                LEDs light the scale. The pulsing key is your next note.<br>
+                Play scales ascending and descending to ride the endless wave.
+            </div>
+            <button class="start-btn" onclick="startGame()" id="startBtn">Start Surfing</button>
+        </div>
+    </div>
+
+    <div class="keyboard-section">
+        <div class="keyboard-label">PartyKeys 36 Keys — LED Preview</div>
+        <div class="keyboard" id="keyboard"></div>
+    </div>
+</div>
+
+<script>
+// ══════ CONSTANTS ══════
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const PK_START = 48, PK_END = 83;
+
+// Scale intervals (semitones from root)
+const MODES = {
+    'Ionian':     [0,2,4,5,7,9,11],    // major
+    'Dorian':     [0,2,3,5,7,9,10],
+    'Phrygian':   [0,1,3,5,7,8,10],
+    'Lydian':     [0,2,4,6,7,9,11],
+    'Mixolydian': [0,2,4,5,7,9,10],
+    'Aeolian':    [0,2,3,5,7,8,10],    // natural minor
+    'Locrian':    [0,1,3,5,6,8,10]
+};
+const EASY_MODES = ['Ionian'];
+const MEDIUM_MODES = ['Ionian','Aeolian'];
+const HARD_MODES = Object.keys(MODES);
+
+// ══════ STATE ══════
+let game = {
+    running: false, paused: false, practiceMode: false,
+    difficulty: 'easy',
+    distance: 0, combo: 0, maxCombo: 0, lives: 3,
+    root: 60, // C4
+    mode: 'Ionian',
+    scaleNotes: [], // flat array of midi notes (2 octaves ascending)
+    scaleIndex: 0,  // current position in scaleNotes
+    direction: 1,   // 1 = ascending, -1 = descending
+    turnsCompleted: 0,
+    nextObstacleAt: 0, obstaclePending: null,
+    consecutiveWrong: 0, wrongFlash: 0,
+    waveOffset: 0, waveHistory: [], // y-history for visual wave
+    surferY: 220,
+    sprayParticles: [], floatingTexts: [],
+    animFrame: null, frameCount: 0,
+    hintLevel: 'full', // full/next-only
+    pausedAt: null,
+    timeInScaleMs: 0, // stopwatch since last scale change
+};
+
+let midiAccess = null, midiOutput = null;
+let audioCtx = null, masterGain = null, bgmGain = null;
+let bgmInterval = null;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ══════ AUDIO ══════
+function initAudio(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.55;
+    masterGain.connect(audioCtx.destination);
+    bgmGain = audioCtx.createGain();
+    bgmGain.gain.value = 0.25;
+    bgmGain.connect(masterGain);
+}
+function midiToFreq(m){ return 440 * Math.pow(2,(m-69)/12); }
+function playNote(midi, dur=0.3, vol=0.3){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = midiToFreq(midi);
+    // Overtone
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.value = midiToFreq(midi+12);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t+dur);
+    gain2.gain.setValueAtTime(vol*0.3, t);
+    gain2.gain.exponentialRampToValueAtTime(0.001, t+dur*0.7);
+    osc.connect(gain); gain.connect(masterGain);
+    osc2.connect(gain2); gain2.connect(masterGain);
+    osc.start(t); osc.stop(t+dur+0.05);
+    osc2.start(t); osc2.stop(t+dur*0.7+0.05);
+}
+function playWrongSound(){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t+0.2);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+    osc.connect(gain); gain.connect(masterGain);
+    osc.start(t); osc.stop(t+0.3);
+}
+function startBGM(){
+    if(!audioCtx || bgmInterval) return;
+    // Simple ambient pad cycling root + 5th
+    const root = 36; // low C
+    let tick = 0;
+    const playPad = ()=>{
+        if(!audioCtx || !game.running || game.paused) return;
+        const notes = [game.root - 24, game.root - 12 + 7];
+        notes.forEach((m,i)=>{
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = midiToFreq(m);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.15, t+1);
+            gain.gain.linearRampToValueAtTime(0, t+3.5);
+            osc.connect(gain); gain.connect(bgmGain);
+            osc.start(t); osc.stop(t+3.6);
+        });
+        tick++;
+    };
+    playPad();
+    bgmInterval = setInterval(playPad, 3800);
+}
+function stopBGM(){
+    if(bgmInterval){ clearInterval(bgmInterval); bgmInterval = null; }
+}
+
+// ══════ MIDI ══════
+async function connectMIDI(){
+    try{
+        midiAccess = await navigator.requestMIDIAccess({sysex:true});
+        let input=null, output=null;
+        for(const i of midiAccess.inputs.values()){ input=i; break; }
+        for(const o of midiAccess.outputs.values()){ output=o; break; }
+        if(input){
+            input.onmidimessage = onMIDIMessage;
+            document.getElementById('statusDot').classList.add('live');
+            document.getElementById('midiStatusText').textContent = 'MIDI connected';
+            document.getElementById('deviceName').textContent = input.name;
+        } else {
+            document.getElementById('midiStatusText').textContent = 'No MIDI input found';
+        }
+        if(output) midiOutput = output;
+    } catch(e){
+        document.getElementById('midiStatusText').textContent = 'MIDI permission denied';
+    }
+}
+function onMIDIMessage(ev){
+    const [status, note, vel] = ev.data;
+    const cmd = status & 0xF0;
+    if(cmd === 0x90 && vel > 0){ onNoteOn(note); }
+}
+function setLED(midiNote, color){
+    if(!midiOutput) return;
+    const map = {off:0,red:10,green:30,blue:50,yellow:70,cyan:90,purple:110,white:125};
+    const v = map[color] || 0;
+    midiOutput.send(v===0 ? [0x80, midiNote, 0] : [0x90, midiNote, v]);
+}
+function clearAllLEDs(){ for(let n=PK_START;n<=PK_END;n++) setLED(n,'off'); }
+
+// ══════ KEYBOARD UI ══════
+function buildKeyboard(){
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+    for(let m=PK_START; m<=PK_END; m++){
+        const pc = m % 12;
+        const isBlack = [1,3,6,8,10].includes(pc);
+        const k = document.createElement('div');
+        k.className = 'key ' + (isBlack?'black':'white');
+        k.dataset.midi = m;
+        kb.appendChild(k);
+    }
+}
+function highlightVirtualKey(midi, cls){
+    const el = document.querySelector(`.key[data-midi="${midi}"]`);
+    if(el){ el.classList.remove('led-hint','led-active','led-danger','led-next'); el.classList.add(cls); }
+}
+function clearVirtualKey(midi){
+    const el = document.querySelector(`.key[data-midi="${midi}"]`);
+    if(el) el.classList.remove('led-hint','led-active','led-danger','led-next');
+}
+function clearAllVirtualKeys(){
+    document.querySelectorAll('.key').forEach(k=>k.classList.remove('led-hint','led-active','led-danger','led-next'));
+}
+
+function refreshScaleLEDs(){
+    clearAllLEDs();
+    clearAllVirtualKeys();
+    // Light all scale notes in cyan
+    game.scaleNotes.forEach((m,idx)=>{
+        if(idx === game.scaleIndex){
+            highlightVirtualKey(m, 'led-next');
+            setLED(m, 'yellow');
+        } else {
+            highlightVirtualKey(m, 'led-hint');
+            setLED(m, 'cyan');
+        }
+    });
+}
+
+// ══════ SCALE LOGIC ══════
+function buildScale(root, mode){
+    // Build 2-octave ascending scale from root
+    const intervals = MODES[mode];
+    const notes = [];
+    for(let oct=0; oct<2; oct++){
+        for(const iv of intervals){
+            notes.push(root + oct*12 + iv);
+        }
+    }
+    notes.push(root + 24); // top octave note
+    return notes;
+}
+
+function pickNewScale(){
+    const pool = game.difficulty==='easy' ? EASY_MODES
+              : game.difficulty==='medium' ? MEDIUM_MODES
+              : HARD_MODES;
+    game.mode = pool[Math.floor(Math.random()*pool.length)];
+    // Pick a root in C3-G4 range so 2 octaves fit in PK range
+    const rootCandidates = [];
+    for(let r=PK_START; r<=PK_END-24; r++){ rootCandidates.push(r); }
+    game.root = rootCandidates[Math.floor(Math.random()*rootCandidates.length)];
+    game.scaleNotes = buildScale(game.root, game.mode);
+    // Start either at bottom or top based on direction intent
+    game.direction = 1;
+    game.scaleIndex = 0;
+    game.timeInScaleMs = performance.now();
+    updateStats();
+    refreshScaleLEDs();
+}
+
+function onNoteOn(midi){
+    if(!game.running || game.paused) return;
+    const expected = game.scaleNotes[game.scaleIndex];
+    if(midi === expected){
+        // Correct!
+        game.combo++;
+        if(game.combo > game.maxCombo) game.maxCombo = game.combo;
+        game.consecutiveWrong = 0;
+        game.distance += 1;
+        playNote(midi, 0.3, 0.32);
+        highlightVirtualKey(midi, 'led-active');
+        setLED(midi, 'green');
+        setTimeout(()=>{
+            // Restore cyan if still in scale
+            if(game.scaleNotes.includes(midi) && midi !== game.scaleNotes[game.scaleIndex]){
+                highlightVirtualKey(midi, 'led-hint');
+                setLED(midi, 'cyan');
+            } else if(midi !== game.scaleNotes[game.scaleIndex]){
+                clearVirtualKey(midi);
+                setLED(midi, 'off');
+            }
+        }, 220);
+
+        // Wave reacts to direction
+        game.waveHistory.push(game.direction);
+        if(game.waveHistory.length > canvas.width) game.waveHistory.shift();
+
+        // Advance index based on direction
+        game.scaleIndex += game.direction;
+
+        // Check bounds → turn or finish
+        if(game.scaleIndex >= game.scaleNotes.length){
+            // Hit the top — switch to descending
+            game.direction = -1;
+            game.scaleIndex = game.scaleNotes.length - 2;
+            game.turnsCompleted++;
+            spawnFloatingText(canvas.width/2, 60, '↓ DESCEND ↓', '#38bdf8');
+        } else if(game.scaleIndex < 0){
+            // Completed a full ascend+descend → celebrate, pick new scale
+            game.turnsCompleted++;
+            game.distance += 20; // bonus for completing
+            spawnFloatingText(canvas.width/2, 60, `SCALE CLEARED +20 m`, '#fbbf24');
+            pickNewScale();
+            return;
+        }
+        refreshScaleLEDs();
+    } else {
+        // Wrong note
+        game.consecutiveWrong++;
+        game.combo = 0;
+        game.wrongFlash = 18;
+        playWrongSound();
+        highlightVirtualKey(midi, 'led-danger');
+        setLED(midi, 'red');
+        spawnSpray(midi);
+        setTimeout(()=>{
+            if(game.scaleNotes.includes(midi)){
+                highlightVirtualKey(midi, 'led-hint');
+                setLED(midi, 'cyan');
+            } else {
+                clearVirtualKey(midi);
+                setLED(midi, 'off');
+            }
+        }, 300);
+        if(game.consecutiveWrong >= 3){
+            if(!game.practiceMode){
+                game.lives--;
+                game.consecutiveWrong = 0;
+                spawnFloatingText(canvas.width/2, 100, '-1 LIFE', '#ef4444');
+                if(game.lives <= 0){ endGame(); return; }
+                // Reset to scale start
+                game.scaleIndex = 0;
+                game.direction = 1;
+                refreshScaleLEDs();
+            } else {
+                game.consecutiveWrong = 0;
+            }
+        }
+    }
+    updateStats();
+}
+
+function spawnSpray(midi){
+    const sx = 100, sy = game.surferY;
+    for(let i=0;i<15;i++){
+        game.sprayParticles.push({
+            x: sx, y: sy,
+            vx: -(2+Math.random()*4), vy: -(2+Math.random()*3),
+            life: 30+Math.random()*20, maxLife: 50,
+            size: 2+Math.random()*3
+        });
+    }
+}
+function spawnFloatingText(x,y,text,color){
+    game.floatingTexts.push({x,y,text,color,life:90,maxLife:90});
+}
+
+// ══════ GAME LOOP ══════
+function startGame(){
+    initAudio();
+    game.running = true;
+    game.paused = false;
+    document.getElementById('pauseBanner').classList.remove('visible');
+    document.getElementById('pauseBtn').disabled = false;
+    document.getElementById('restartBtn').disabled = false;
+    document.getElementById('practiceBadge').classList.toggle('visible', game.practiceMode);
+    game.distance = 0; game.combo = 0; game.maxCombo = 0; game.lives = 3;
+    game.consecutiveWrong = 0; game.wrongFlash = 0;
+    game.turnsCompleted = 0;
+    game.sprayParticles = []; game.floatingTexts = []; game.waveHistory = [];
+    game.frameCount = 0;
+    game.surferY = 220;
+    pickNewScale();
+    startBGM();
+    document.getElementById('gameOverlay').classList.add('hidden');
+    if(game.animFrame) cancelAnimationFrame(game.animFrame);
+    gameLoop();
+}
+
+function gameLoop(){
+    if(!game.running) return;
+    if(!game.paused){
+        game.frameCount++;
+        update();
+    }
+    render();
+    game.animFrame = requestAnimationFrame(gameLoop);
+}
+
+function update(){
+    // Surfer y position reacts to direction and progress through scale
+    const scaleProgress = game.scaleIndex / (game.scaleNotes.length-1);
+    // Ascending = upper screen (lower y), descending builds back
+    const targetY = 340 - scaleProgress * 260;
+    game.surferY += (targetY - game.surferY) * 0.08;
+
+    game.waveOffset += 1.5;
+
+    if(game.wrongFlash > 0) game.wrongFlash--;
+
+    // Spray particles
+    for(let i=game.sprayParticles.length-1;i>=0;i--){
+        const p = game.sprayParticles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.25;
+        p.life--;
+        if(p.life <= 0) game.sprayParticles.splice(i,1);
+    }
+    // Floating texts
+    for(let i=game.floatingTexts.length-1;i>=0;i--){
+        const ft = game.floatingTexts[i];
+        ft.y -= 0.6; ft.life--;
+        if(ft.life <= 0) game.floatingTexts.splice(i,1);
+    }
+}
+
+function render(){
+    const W = canvas.width, H = canvas.height;
+    // Sky gradient
+    const skyGrad = ctx.createLinearGradient(0,0,0,H);
+    skyGrad.addColorStop(0,'#0a1a2e');
+    skyGrad.addColorStop(0.5,'#1e3a5f');
+    skyGrad.addColorStop(0.7,'#2563eb');
+    skyGrad.addColorStop(1,'#0ea5e9');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0,0,W,H);
+
+    // Stars
+    for(let i=0;i<30;i++){
+        const x = (i*137 + game.frameCount*0.1) % W;
+        const y = (i*71) % (H*0.4);
+        ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(game.frameCount*0.03 + i)*0.2})`;
+        ctx.fillRect(x, y, 2, 2);
+    }
+
+    // Wave surface
+    const waveY = H * 0.7;
+    ctx.strokeStyle = 'rgba(96,165,250,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for(let x=0; x<W; x++){
+        const y = waveY + Math.sin(x*0.02 + game.frameCount*0.04) * 8;
+        if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // Under-wave water gradient
+    const waterGrad = ctx.createLinearGradient(0, waveY, 0, H);
+    waterGrad.addColorStop(0,'rgba(30,64,175,0.6)');
+    waterGrad.addColorStop(1,'rgba(7,25,77,1)');
+    ctx.fillStyle = waterGrad;
+    ctx.fillRect(0, waveY, W, H-waveY);
+
+    // Wave history trail (shows player's direction history as an arc)
+    if(game.waveHistory.length > 5){
+        ctx.strokeStyle = 'rgba(52,211,153,0.5)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        let prevY = game.surferY;
+        for(let i=game.waveHistory.length-1; i>=0; i--){
+            const xPos = 100 + (game.waveHistory.length - 1 - i) * 8;
+            if(xPos > W) break;
+            const dir = game.waveHistory[i];
+            prevY += dir * 3;
+            if(i===game.waveHistory.length-1) ctx.moveTo(xPos, prevY);
+            else ctx.lineTo(xPos, prevY);
+        }
+        ctx.stroke();
+    }
+
+    // Wrong flash
+    if(game.wrongFlash > 0){
+        ctx.fillStyle = `rgba(239,68,68,${game.wrongFlash/40})`;
+        ctx.fillRect(0,0,W,H);
+    }
+
+    // Scale info banner (top center)
+    ctx.fillStyle = 'rgba(15,23,42,0.7)';
+    ctx.fillRect(W/2-180, 10, 360, 54);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.strokeRect(W/2-180, 10, 360, 54);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    const rootName = NOTE_NAMES[game.root % 12];
+    ctx.fillText(`${rootName} ${game.mode}`, W/2, 36);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '13px sans-serif';
+    const dirText = game.direction === 1 ? '↑ Ascend' : '↓ Descend';
+    ctx.fillText(`${dirText}  ·  Note ${game.scaleIndex+1}/${game.scaleNotes.length}`, W/2, 56);
+
+    // Progress indicator for current scale
+    const pbW = 300, pbX = W/2 - pbW/2, pbY = 80;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(pbX, pbY, pbW, 6);
+    const prog = game.direction === 1
+        ? (game.scaleIndex / (game.scaleNotes.length - 1))
+        : (1 - game.scaleIndex / (game.scaleNotes.length - 1));
+    const turnBonus = game.direction === -1 ? 0.5 : 0;
+    const pbFill = game.direction === 1
+        ? (game.scaleIndex / (game.scaleNotes.length - 1)) * 0.5
+        : 0.5 + (1 - game.scaleIndex / (game.scaleNotes.length - 1)) * 0.5;
+    const pbGrad = ctx.createLinearGradient(pbX, 0, pbX+pbW, 0);
+    pbGrad.addColorStop(0, '#38bdf8'); pbGrad.addColorStop(1, '#34d399');
+    ctx.fillStyle = pbGrad;
+    ctx.fillRect(pbX, pbY, pbW * pbFill, 6);
+
+    // Lives hearts
+    for(let i=0;i<3;i++){
+        const alive = i < game.lives;
+        ctx.fillStyle = alive ? '#ef4444' : '#334155';
+        drawHeart(24 + i*26, 30, 10);
+    }
+
+    // Distance (top right)
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${game.distance} m`, W-20, 36);
+
+    // Surfer
+    drawSurfer(100, game.surferY);
+
+    // Spray particles
+    for(const p of game.sprayParticles){
+        const a = p.life/p.maxLife;
+        ctx.fillStyle = `rgba(186,230,253,${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size*a, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // Floating texts
+    for(const ft of game.floatingTexts){
+        ctx.globalAlpha = ft.life/ft.maxLife;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        // outline
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeText(ft.text, ft.x, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // Next-note hint display (big note name near surfer)
+    const expected = game.scaleNotes[game.scaleIndex];
+    const expectedName = NOTE_NAMES[expected%12] + Math.floor(expected/12-1);
+    ctx.fillStyle = 'rgba(251,191,36,0.9)';
+    ctx.strokeStyle = '#92400e';
+    ctx.lineWidth = 3;
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    const nx = 100, ny = game.surferY - 60;
+    ctx.strokeText(expectedName, nx, ny);
+    ctx.fillText(expectedName, nx, ny);
+}
+
+function drawSurfer(x,y){
+    ctx.save();
+    ctx.translate(x, y);
+    // Board
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.ellipse(0, 14, 40, 8, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2;
+    ctx.stroke();
+    // Body
+    ctx.fillStyle = '#f472b6';
+    ctx.fillRect(-6, -22, 12, 28);
+    // Head
+    ctx.fillStyle = '#fde68a';
+    ctx.beginPath(); ctx.arc(0, -30, 8, 0, Math.PI*2); ctx.fill();
+    // Arms (dynamic based on direction)
+    ctx.strokeStyle = '#fde68a'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    if(game.direction === 1){
+        ctx.moveTo(-5, -10); ctx.lineTo(-15, -22);
+        ctx.moveTo(5, -10); ctx.lineTo(15, -20);
+    } else {
+        ctx.moveTo(-5, -10); ctx.lineTo(-15, -2);
+        ctx.moveTo(5, -10); ctx.lineTo(15, -4);
+    }
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawHeart(cx, cy, size){
+    ctx.beginPath();
+    ctx.moveTo(cx, cy+size*0.3);
+    ctx.bezierCurveTo(cx, cy, cx-size, cy, cx-size, cy-size*0.3);
+    ctx.bezierCurveTo(cx-size, cy-size, cx, cy-size, cx, cy-size*0.4);
+    ctx.bezierCurveTo(cx, cy-size, cx+size, cy-size, cx+size, cy-size*0.3);
+    ctx.bezierCurveTo(cx+size, cy, cx, cy, cx, cy+size*0.3);
+    ctx.fill();
+}
+
+function updateStats(){
+    document.getElementById('distVal').textContent = game.distance + ' m';
+    document.getElementById('comboVal').textContent = game.combo;
+    document.getElementById('livesVal').textContent = game.lives;
+    document.getElementById('modeVal').textContent = game.mode;
+    document.getElementById('rootVal').textContent = NOTE_NAMES[game.root % 12];
+}
+
+function endGame(){
+    game.running = false;
+    game.paused = false;
+    stopBGM();
+    document.getElementById('pauseBtn').disabled = true;
+    document.getElementById('restartBtn').disabled = true;
+    document.getElementById('pauseBanner').classList.remove('visible');
+    clearAllLEDs();
+    clearAllVirtualKeys();
+    const ov = document.getElementById('gameOverlay');
+    ov.classList.remove('hidden');
+    document.getElementById('overlayTitle').textContent = 'Wipeout!';
+    document.getElementById('overlaySub').innerHTML = `
+        <div style="font-size:1.4em;margin-bottom:8px">🌊</div>
+        Distance: <b>${game.distance} m</b><br>
+        Max streak: <b>${game.maxCombo}</b><br>
+        Scales cleared: <b>${game.turnsCompleted}</b>`;
+    document.getElementById('startBtn').textContent = 'Surf Again';
+}
+
+// ══════ PAUSE/RESTART/PRACTICE ══════
+function togglePause(){
+    if(!game.running) return;
+    game.paused = !game.paused;
+    const banner = document.getElementById('pauseBanner');
+    const btn = document.getElementById('pauseBtn');
+    if(game.paused){
+        banner.classList.add('visible');
+        btn.classList.add('paused');
+        btn.innerHTML = 'Resume<span class="kbd">Space</span>';
+        game.pausedAt = performance.now();
+        if(bgmGain && audioCtx){
+            try{ bgmGain.gain.setValueAtTime(0, audioCtx.currentTime); } catch(e){}
+        }
+    } else {
+        banner.classList.remove('visible');
+        btn.classList.remove('paused');
+        btn.innerHTML = 'Pause<span class="kbd">Space</span>';
+        if(bgmGain && audioCtx){
+            try{ bgmGain.gain.setValueAtTime(0.25, audioCtx.currentTime); } catch(e){}
+        }
+    }
+}
+function restartGame(){
+    if(game.animFrame) cancelAnimationFrame(game.animFrame);
+    stopBGM();
+    game.running = false;
+    game.paused = false;
+    document.getElementById('pauseBanner').classList.remove('visible');
+    clearAllLEDs();
+    clearAllVirtualKeys();
+    startGame();
+}
+function togglePractice(){
+    game.practiceMode = !game.practiceMode;
+    const btn = document.getElementById('practiceBtn');
+    const badge = document.getElementById('practiceBadge');
+    if(game.practiceMode){
+        btn.classList.add('active');
+        badge.classList.add('visible');
+    } else {
+        btn.classList.remove('active');
+        badge.classList.remove('visible');
+    }
+}
+
+document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden && game.running && !game.paused) togglePause();
+});
+window.addEventListener('blur', ()=>{
+    if(game.running && !game.paused) togglePause();
+});
+
+document.addEventListener('keydown', e=>{
+    if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if(e.code === 'Space' || e.key === ' '){
+        if(game.running){ togglePause(); e.preventDefault(); } return;
+    }
+    if(e.key === 'r' || e.key === 'R'){
+        if(game.running){ restartGame(); e.preventDefault(); } return;
+    }
+    if(e.key === 'p' || e.key === 'P'){ togglePractice(); e.preventDefault(); return; }
+    if(e.key === 'Escape'){
+        if(game.running){
+            if(game.paused) togglePause();
+            endGame(); e.preventDefault();
+        }
+        return;
+    }
+});
+
+document.querySelectorAll('.diff-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+        document.querySelectorAll('.diff-btn').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+        game.difficulty = b.dataset.diff;
+    });
+});
+
+// ══════ INIT ══════
+buildKeyboard();
+connectMIDI();
+</script>
+</body>
+</html>

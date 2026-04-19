@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metronome Marathon - MIDI Rhythm Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg1: #0a0a1a;
+            --bg2: #0d1b2a;
+            --accent: #00f5d4;
+            --danger: #ff6b6b;
+            --text: #e0e0e0;
+            --card-bg: rgba(255,255,255,0.05);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg1), var(--bg2));
+            min-height: 100vh;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 10px 15px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 1.6em;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* MIDI Status */
+        .midi-bar {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.85em;
+        }
+
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+        .status-dot.connected { background: #10b981; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+        .midi-btn {
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 6px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: transform 0.15s;
+        }
+        .midi-btn:hover { transform: scale(1.05); }
+
+        /* Stats Row */
+        .stats-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 80px;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 12px;
+            text-align: center;
+        }
+        .stat-val { font-size: 1.3em; font-weight: 700; color: var(--accent); }
+        .stat-label { font-size: 0.65em; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Controls Row */
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 6px 12px;
+            font-size: 0.8em;
+        }
+        .control-group label { color: #94a3b8; font-size: 0.85em; }
+        .control-group select, .control-group input[type=range] {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.85em;
+        }
+        .control-group input[type=range] { width: 70px; }
+
+        .diff-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text);
+            padding: 5px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82em;
+            transition: all 0.2s;
+        }
+        .diff-btn:hover { background: rgba(255,255,255,0.12); }
+        .diff-btn.active { border-color: var(--accent); color: var(--accent); }
+
+        .mute-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text);
+            padding: 5px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82em;
+        }
+        .mute-btn.muted { border-color: var(--danger); color: var(--danger); }
+
+        /* Game Canvas */
+        .game-wrapper {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.1);
+            margin-bottom: 8px;
+        }
+        .game-canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(6px);
+            z-index: 10;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .game-overlay.hidden { display: none; }
+        .overlay-title {
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .overlay-sub { font-size: 1em; color: #94a3b8; text-align: center; line-height: 1.6; }
+        .start-btn {
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 12px 36px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .start-btn:hover { transform: scale(1.08); }
+
+        /* Piano Keyboard */
+        .keyboard-section {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 10px;
+            text-align: center;
+        }
+        .keyboard-label {
+            font-size: 0.75em;
+            color: #64748b;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .keyboard {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            height: 110px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .key {
+            position: relative;
+            border-radius: 0 0 5px 5px;
+            cursor: pointer;
+            transition: background 0.1s, box-shadow 0.1s;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            user-select: none;
+        }
+        .key.white {
+            width: 24px;
+            height: 100px;
+            background: linear-gradient(to bottom, #f8f8f8, #e8e8e8);
+            border: 1px solid #ccc;
+            z-index: 0;
+        }
+        .key.black {
+            width: 16px;
+            height: 65px;
+            background: linear-gradient(to bottom, #333, #111);
+            border: 1px solid #000;
+            margin: 0 -8px;
+            z-index: 1;
+        }
+        .key .note-label {
+            font-size: 7px;
+            color: #999;
+            pointer-events: none;
+        }
+        .key.black .note-label { color: #666; }
+
+        .key.led-red    { box-shadow: 0 0 12px #ff4444 inset, 0 0 8px #ff4444; }
+        .key.led-green  { box-shadow: 0 0 12px #44ff44 inset, 0 0 8px #44ff44; }
+        .key.led-blue   { box-shadow: 0 0 12px #4488ff inset, 0 0 8px #4488ff; }
+        .key.led-yellow { box-shadow: 0 0 12px #ffcc00 inset, 0 0 8px #ffcc00; }
+        .key.led-cyan   { box-shadow: 0 0 12px #00f5d4 inset, 0 0 8px #00f5d4; }
+        .key.led-purple { box-shadow: 0 0 12px #aa44ff inset, 0 0 8px #aa44ff; }
+        .key.led-white  { box-shadow: 0 0 12px #ffffff inset, 0 0 8px #ffffff; }
+        .key.active     { box-shadow: 0 0 12px var(--accent) inset, 0 0 8px var(--accent); }
+
+        .shortcuts-hint {
+            text-align: center;
+            font-size: 0.7em;
+            color: #475569;
+            margin-top: 8px;
+            padding: 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Metronome Marathon</h1>
+    </div>
+
+    <!-- MIDI Bar -->
+    <div class="midi-bar">
+        <div>
+            <span class="status-dot" id="midiDot"></span>
+            <span id="midiStatus">MIDI: Not connected</span>
+        </div>
+        <button class="midi-btn" id="midiConnectBtn" onclick="connectMIDI()">Connect MIDI</button>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-val" id="statBPM">--</div>
+            <div class="stat-label">BPM</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val" id="statBeats">0</div>
+            <div class="stat-label">Beats</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val" id="statLives">&#9829;&#9829;&#9829;</div>
+            <div class="stat-label">Lives</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val" id="statScore">0</div>
+            <div class="stat-label">Score</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val" id="statHigh">0</div>
+            <div class="stat-label">High Score</div>
+        </div>
+    </div>
+
+    <!-- Controls Row -->
+    <div class="controls-row">
+        <div class="control-group">
+            <label>Difficulty:</label>
+            <button class="diff-btn active" onclick="setDifficulty('easy',this)">Easy</button>
+            <button class="diff-btn" onclick="setDifficulty('medium',this)">Medium</button>
+            <button class="diff-btn" onclick="setDifficulty('hard',this)">Hard</button>
+        </div>
+        <div class="control-group">
+            <label>BGM</label><input type="range" min="0" max="100" value="20" oninput="setBGMVolume(this.value)">
+        </div>
+        <div class="control-group">
+            <label>SFX</label><input type="range" min="0" max="100" value="70" oninput="setSFXVolume(this.value)">
+        </div>
+        <div class="control-group">
+            <label>Keys</label><input type="range" min="0" max="100" value="50" oninput="setKeysVolume(this.value)">
+        </div>
+        <button class="mute-btn" id="muteAllBtn" onclick="toggleMuteAll()">Mute All</button>
+    </div>
+
+    <!-- Game Canvas -->
+    <div class="game-wrapper">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="450"></canvas>
+        <div class="game-overlay" id="gameOverlay">
+            <div class="overlay-title" id="overlayTitle">Metronome Marathon</div>
+            <div class="overlay-sub" id="overlaySub">
+                Match the rhythm. Play the right notes on the beat.<br>
+                BPM ramps up. Subdivisions get trickier. Three misses and you're out.<br><br>
+                <strong>Space</strong> = Pause &nbsp; <strong>R</strong> = Restart &nbsp; <strong>Esc</strong> = Quit
+            </div>
+            <button class="start-btn" id="startBtn" onclick="startGame()">Start</button>
+        </div>
+    </div>
+
+    <!-- Virtual Keyboard -->
+    <div class="keyboard-section">
+        <div class="keyboard-label">PartyKeys 36 Keys &mdash; LED Preview</div>
+        <div class="keyboard" id="keyboard"></div>
+    </div>
+
+    <div class="shortcuts-hint">
+        Space = Pause &nbsp;|&nbsp; R = Restart &nbsp;|&nbsp; Esc = Quit
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════
+const PK_START = 48; // C3
+const PK_END = 83;   // B5
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const LED_COLORS = { off:0, red:10, green:30, blue:50, yellow:70, cyan:90, purple:110, white:125 };
+
+// C major scale notes
+const C_MAJOR = ['C','D','E','F','G','A','B'];
+// Chord definitions (root note names within C major)
+const CHORDS = {
+    'C':  [0, 4, 7],   // C E G
+    'Dm': [2, 5, 9],   // D F A
+    'Em': [4, 7, 11],  // E G B
+    'F':  [5, 9, 12],  // F A C+
+    'G':  [7, 11, 14], // G B D+
+    'Am': [9, 12, 16], // A C+ E+
+};
+// Hard mode extra chords
+const HARD_CHORDS = {
+    ...CHORDS,
+    'Bdim': [11, 14, 17],
+    'Cm':   [0, 3, 7],
+    'D':    [2, 6, 9],
+    'E':    [4, 8, 11],
+    'Fm':   [5, 8, 12],
+    'Ab':   [8, 12, 15],
+    'Bb':   [10, 14, 17],
+};
+
+// ═══════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════
+const GS = {
+    running: false,
+    paused: false,
+    difficulty: 'easy',
+    baseBPM: 80,
+    bpm: 80,
+    beatCount: 0,
+    score: 0,
+    highScore: 0,
+    lives: 3,
+    maxLives: 3,
+    perfectCount: 0,
+    goodCount: 0,
+    missCount: 0,
+
+    // Timing
+    lastBeatTime: 0,
+    beatInterval: 0,
+    subDiv: 1, // 1=quarter, 2=eighth, 3=triplet, 4=sixteenth
+    subBeatIndex: 0,
+
+    // Target queue: upcoming notes/chords to play
+    targets: [],       // { midi: [noteNums], name: string, beatNum: number, subBeat: number, hitTime: number, hit: bool }
+    currentTargetIdx: 0,
+
+    // Player pressed notes (currently held)
+    heldNotes: new Set(),
+
+    // Visual feedback
+    feedbacks: [],  // { type: 'perfect'|'good'|'miss', time: number, x: number, y: number }
+
+    // Runner position (0 to 1)
+    runnerProgress: 0,
+
+    // Intensity (0 to 1)
+    intensity: 0,
+
+    // Pendulum angle
+    pendulumAngle: 0,
+    pendulumDir: 1,
+};
+
+// ═══════════════════════════════════════
+// MIDI
+// ═══════════════════════════════════════
+let midiAccess = null;
+let midiOutput = null;
+let midiInputConnected = false;
+
+// Audio
+let audioCtx = null;
+let masterGain = null;
+let bgmGain = null;
+let sfxGain = null;
+let keysGain = null;
+let activeNotes = new Map();
+let allMuted = false;
+
+// Canvas
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let animFrame = null;
+
+// ═══════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0;
+    masterGain.connect(audioCtx.destination);
+
+    bgmGain = audioCtx.createGain();
+    bgmGain.gain.value = 0.2;
+    bgmGain.connect(masterGain);
+
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.7;
+    sfxGain.connect(masterGain);
+
+    keysGain = audioCtx.createGain();
+    keysGain.gain.value = 0.5;
+    keysGain.connect(masterGain);
+}
+
+function setBGMVolume(v)  { if (bgmGain)  bgmGain.gain.value  = v / 100; }
+function setSFXVolume(v)  { if (sfxGain)  sfxGain.gain.value  = v / 100; }
+function setKeysVolume(v) { if (keysGain) keysGain.gain.value = v / 100; }
+function toggleMuteAll() {
+    allMuted = !allMuted;
+    if (masterGain) masterGain.gain.value = allMuted ? 0 : 1;
+    const btn = document.getElementById('muteAllBtn');
+    btn.textContent = allMuted ? 'Unmute' : 'Mute All';
+    btn.classList.toggle('muted', allMuted);
+}
+
+function midiToFreq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function midiToName(midi) {
+    return NOTE_NAMES[midi % 12] + Math.floor(midi / 12 - 1);
+}
+
+// 5-partial piano synthesis
+function playPianoNote(midiNum, destination, duration = 1.5, velocity = 0.3) {
+    initAudio();
+    const freq = midiToFreq(midiNum);
+    const now = audioCtx.currentTime;
+
+    const partials = [
+        { ratio: 1,   amp: 1.0,  type: 'sine' },
+        { ratio: 2,   amp: 0.5,  type: 'sine' },
+        { ratio: 3,   amp: 0.25, type: 'sine' },
+        { ratio: 4,   amp: 0.12, type: 'sine' },
+        { ratio: 5.04,amp: 0.06, type: 'sine' },
+    ];
+
+    const merge = audioCtx.createGain();
+    merge.gain.setValueAtTime(velocity, now);
+    merge.gain.exponentialRampToValueAtTime(velocity * 0.6, now + 0.05);
+    merge.gain.exponentialRampToValueAtTime(velocity * 0.3, now + duration * 0.4);
+    merge.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    // Slight brightness filter
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(Math.min(freq * 8, 12000), now);
+    filter.frequency.exponentialRampToValueAtTime(Math.min(freq * 3, 4000), now + duration * 0.5);
+    filter.Q.value = 0.7;
+
+    partials.forEach(p => {
+        const osc = audioCtx.createOscillator();
+        osc.type = p.type;
+        osc.frequency.value = freq * p.ratio;
+        // Slight detune for richness
+        osc.detune.value = (Math.random() - 0.5) * 4;
+
+        const pGain = audioCtx.createGain();
+        pGain.gain.value = p.amp;
+
+        osc.connect(pGain);
+        pGain.connect(merge);
+        osc.start(now);
+        osc.stop(now + duration + 0.1);
+    });
+
+    merge.connect(filter);
+    filter.connect(destination);
+
+    return merge;
+}
+
+// Player key press sound
+function playKeyNote(midiNum) {
+    initAudio();
+    if (activeNotes.has(midiNum)) return;
+
+    const node = playPianoNote(midiNum, keysGain, 1.2, 0.25);
+    activeNotes.set(midiNum, { node, startTime: audioCtx.currentTime });
+}
+
+function stopKeyNote(midiNum) {
+    if (!audioCtx) return;
+    const data = activeNotes.get(midiNum);
+    if (!data) return;
+    const now = audioCtx.currentTime;
+    try {
+        data.node.gain.cancelScheduledValues(now);
+        data.node.gain.setValueAtTime(data.node.gain.value, now);
+        data.node.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    } catch(e) {}
+    activeNotes.delete(midiNum);
+}
+
+// SFX target note playback
+function playSFXNote(midiNotes) {
+    initAudio();
+    midiNotes.forEach(n => playPianoNote(n, sfxGain, 0.8, 0.2));
+}
+
+// Metronome click - crisp noise burst
+function playClick(accent) {
+    initAudio();
+    const now = audioCtx.currentTime;
+    const dur = accent ? 0.04 : 0.025;
+    const vol = accent ? 0.5 : 0.3;
+
+    // Noise via buffer
+    const bufLen = audioCtx.sampleRate * dur;
+    const buf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = accent ? 2500 : 2000;
+    bp.Q.value = 3;
+
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(bgmGain);
+    src.start(now);
+    src.stop(now + dur + 0.01);
+}
+
+// Sub-bass drone that intensifies
+let droneOsc = null;
+let droneGain = null;
+function startDrone() {
+    initAudio();
+    if (droneOsc) return;
+    const now = audioCtx.currentTime;
+
+    droneOsc = audioCtx.createOscillator();
+    droneOsc.type = 'sine';
+    droneOsc.frequency.value = 55; // A1
+
+    droneGain = audioCtx.createGain();
+    droneGain.gain.value = 0;
+
+    droneOsc.connect(droneGain);
+    droneGain.connect(bgmGain);
+    droneOsc.start(now);
+}
+
+function updateDrone() {
+    if (!droneGain) return;
+    // Intensity from 0 to 0.3 based on BPM progression
+    const t = Math.min((GS.bpm - GS.baseBPM) / 120, 1);
+    droneGain.gain.value = t * 0.3;
+    if (droneOsc) droneOsc.frequency.value = 55 + t * 30; // pitch up slightly
+}
+
+function stopDrone() {
+    if (droneOsc) { try { droneOsc.stop(); } catch(e) {} droneOsc = null; }
+    droneGain = null;
+}
+
+// Heartbeat sub-bass at high BPM
+function playHeartbeat() {
+    if (!audioCtx || GS.bpm < 140) return;
+    const now = audioCtx.currentTime;
+    const vol = Math.min((GS.bpm - 140) / 80, 1) * 0.15;
+
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 40;
+
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+    osc.connect(g);
+    g.connect(bgmGain);
+    osc.start(now);
+    osc.stop(now + 0.2);
+}
+
+// ═══════════════════════════════════════
+// MIDI CONNECTION & LED
+// ═══════════════════════════════════════
+async function connectMIDI() {
+    initAudio();
+    try {
+        midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+        midiAccess.inputs.forEach(input => {
+            input.onmidimessage = handleMIDIMessage;
+            midiInputConnected = true;
+        });
+        midiAccess.outputs.forEach(output => { if (!midiOutput) midiOutput = output; });
+
+        updateMIDIStatus();
+
+        midiAccess.onstatechange = (e) => {
+            if (e.port.type === 'input' && e.port.state === 'connected') {
+                e.port.onmidimessage = handleMIDIMessage;
+                midiInputConnected = true;
+            }
+            if (e.port.type === 'output' && e.port.state === 'connected' && !midiOutput) midiOutput = e.port;
+            updateMIDIStatus();
+        };
+    } catch (err) {
+        document.getElementById('midiStatus').textContent = 'MIDI: ' + err.message;
+    }
+}
+
+function updateMIDIStatus() {
+    const dot = document.getElementById('midiDot');
+    const txt = document.getElementById('midiStatus');
+    if (midiInputConnected) {
+        dot.classList.add('connected');
+        txt.textContent = 'MIDI: Connected';
+    }
+}
+
+// LED Protocol
+function setLED(midiNote, color) {
+    if (!midiOutput) return;
+    const vel = LED_COLORS[color] || 0;
+    midiOutput.send(vel === 0 ? [0x80, midiNote, 0] : [0x90, midiNote, vel]);
+    // Update virtual keyboard
+    updateKeyLED(midiNote, color);
+}
+
+function clearAllLEDs() {
+    if (midiOutput) {
+        for (let n = PK_START; n <= PK_END; n++) midiOutput.send([0x80, n, 0]);
+    }
+    document.querySelectorAll('.key').forEach(k => {
+        k.className = k.className.replace(/led-\w+/g, '').replace(/active/g, '').trim();
+    });
+}
+
+function setMultiLED(midiNotes, color) {
+    midiNotes.forEach(n => {
+        if (n >= PK_START && n <= PK_END) setLED(n, color);
+    });
+}
+
+function updateKeyLED(midiNote, color) {
+    const keyEl = document.querySelector(`.key[data-midi="${midiNote}"]`);
+    if (!keyEl) return;
+    keyEl.className = keyEl.className.replace(/led-\w+/g, '').replace(/active/g, '').trim();
+    if (color !== 'off') {
+        keyEl.classList.add('led-' + color);
+    }
+}
+
+// ═══════════════════════════════════════
+// MIDI MESSAGE HANDLER
+// ═══════════════════════════════════════
+function handleMIDIMessage(msg) {
+    const [status, note, velocity] = msg.data;
+    const cmd = status & 0xF0;
+
+    if (cmd === 0x90 && velocity > 0) {
+        onNoteOn(note);
+    } else if (cmd === 0x80 || (cmd === 0x90 && velocity === 0)) {
+        onNoteOff(note);
+    }
+}
+
+function onNoteOn(note) {
+    initAudio();
+    GS.heldNotes.add(note);
+    playKeyNote(note);
+
+    // Visual
+    const keyEl = document.querySelector(`.key[data-midi="${note}"]`);
+    if (keyEl) keyEl.classList.add('active');
+
+    if (GS.running && !GS.paused) {
+        checkHit(note);
+    }
+}
+
+function onNoteOff(note) {
+    GS.heldNotes.delete(note);
+    stopKeyNote(note);
+
+    const keyEl = document.querySelector(`.key[data-midi="${note}"]`);
+    if (keyEl) keyEl.classList.remove('active');
+}
+
+// ═══════════════════════════════════════
+// NOTE/CHORD GENERATION
+// ═══════════════════════════════════════
+function generateTarget(beatNum, subBeat) {
+    const diff = GS.difficulty;
+    const useChord = (diff === 'medium' && Math.random() < 0.3) || (diff === 'hard' && Math.random() < 0.5);
+
+    if (useChord) {
+        const chordSet = diff === 'hard' ? HARD_CHORDS : CHORDS;
+        const chordNames = Object.keys(chordSet);
+        const name = chordNames[Math.floor(Math.random() * chordNames.length)];
+        const intervals = chordSet[name];
+        // Pick a base octave
+        const baseOct = 3 + Math.floor(Math.random() * 2); // octave 3 or 4
+        const baseMidi = (baseOct + 1) * 12; // C of that octave
+        const midiNotes = intervals.map(i => baseMidi + i).filter(n => n >= PK_START && n <= PK_END);
+        if (midiNotes.length === 0) return generateTarget(beatNum, subBeat); // retry
+
+        return {
+            midi: midiNotes,
+            name: name + baseOct,
+            beatNum,
+            subBeat,
+            hitTime: 0, // computed later
+            hit: false,
+            judged: false,
+        };
+    } else {
+        // Single note
+        let note;
+        if (diff === 'hard') {
+            // Chromatic
+            note = PK_START + Math.floor(Math.random() * (PK_END - PK_START + 1));
+        } else {
+            // C major scale
+            const scaleNotes = [];
+            for (let oct = 3; oct <= 5; oct++) {
+                C_MAJOR.forEach(n => {
+                    const midi = (oct + 1) * 12 + NOTE_NAMES.indexOf(n);
+                    if (midi >= PK_START && midi <= PK_END) scaleNotes.push(midi);
+                });
+            }
+            note = scaleNotes[Math.floor(Math.random() * scaleNotes.length)];
+        }
+
+        return {
+            midi: [note],
+            name: midiToName(note),
+            beatNum,
+            subBeat,
+            hitTime: 0,
+            hit: false,
+            judged: false,
+        };
+    }
+}
+
+// ═══════════════════════════════════════
+// HIT DETECTION
+// ═══════════════════════════════════════
+function checkHit(pressedNote) {
+    const now = performance.now();
+    const window_ms = 100; // +/- 100ms
+    const perfect_ms = 30;
+
+    // Find nearest unjudged target within window
+    for (let i = 0; i < GS.targets.length; i++) {
+        const t = GS.targets[i];
+        if (t.judged || t.hit) continue;
+
+        const diff = now - t.hitTime;
+        if (Math.abs(diff) > window_ms + 50) continue; // generous pre-window
+
+        // Check if the pressed note is in this target
+        if (t.midi.includes(pressedNote)) {
+            // For chords, check if all notes are held
+            const allHeld = t.midi.every(n => GS.heldNotes.has(n));
+
+            if (t.midi.length === 1 || allHeld) {
+                const absDiff = Math.abs(diff);
+
+                if (absDiff <= perfect_ms) {
+                    // Perfect
+                    t.hit = true;
+                    t.judged = true;
+                    GS.perfectCount++;
+                    GS.score += GS.bpm;
+                    if (GS.lives < GS.maxLives) GS.lives++;
+                    addFeedback('perfect');
+                    setMultiLED(t.midi, 'green');
+                    setTimeout(() => setMultiLED(t.midi, 'off'), 200);
+                    playSFXNote(t.midi);
+                } else if (absDiff <= window_ms) {
+                    // Good
+                    t.hit = true;
+                    t.judged = true;
+                    GS.goodCount++;
+                    GS.score += Math.floor(GS.bpm * 0.5);
+                    addFeedback('good');
+                    setMultiLED(t.midi, 'yellow');
+                    setTimeout(() => setMultiLED(t.midi, 'off'), 200);
+                    playSFXNote(t.midi);
+                }
+                return;
+            }
+        }
+    }
+}
+
+function addFeedback(type) {
+    GS.feedbacks.push({ type, time: performance.now(), x: 530, y: 200 });
+}
+
+// ═══════════════════════════════════════
+// GAME LOOP
+// ═══════════════════════════════════════
+let lastFrameTime = 0;
+let schedulerTime = 0;
+
+function setDifficulty(diff, btn) {
+    GS.difficulty = diff;
+    GS.baseBPM = diff === 'easy' ? 80 : diff === 'medium' ? 100 : 120;
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+
+function startGame() {
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    GS.running = true;
+    GS.paused = false;
+    GS.bpm = GS.baseBPM;
+    GS.beatCount = 0;
+    GS.score = 0;
+    GS.lives = 3;
+    GS.perfectCount = 0;
+    GS.goodCount = 0;
+    GS.missCount = 0;
+    GS.targets = [];
+    GS.currentTargetIdx = 0;
+    GS.heldNotes.clear();
+    GS.feedbacks = [];
+    GS.runnerProgress = 0;
+    GS.intensity = 0;
+    GS.subDiv = 1;
+    GS.subBeatIndex = 0;
+    GS.pendulumAngle = 0;
+    GS.pendulumDir = 1;
+
+    GS.beatInterval = 60000 / GS.bpm;
+
+    // beatTimes[i] = absolute time of beat i
+    GS.beatTimes = [];
+    GS.nextBeatToSchedule = 0;
+    GS.nextBeatToFire = 0;
+
+    const startTime = performance.now() + 2000; // 2s countdown
+
+    // Pre-compute beat times for first 32 beats
+    let t = startTime;
+    for (let b = 0; b < 32; b++) {
+        GS.beatTimes[b] = t;
+        const bpmAtBeat = GS.baseBPM + Math.floor(b / 16) * 2;
+        t += 60000 / bpmAtBeat;
+    }
+
+    clearAllLEDs();
+    document.getElementById('gameOverlay').classList.add('hidden');
+
+    // Pre-generate targets for first 16 beats
+    for (let b = 0; b < 16; b++) {
+        scheduleBeatsForBeat(b);
+    }
+    GS.nextBeatToSchedule = 16;
+
+    startDrone();
+    lastFrameTime = performance.now();
+    gameLoop(performance.now());
+}
+
+function ensureBeatTimes(upTo) {
+    while (GS.beatTimes.length <= upTo) {
+        const b = GS.beatTimes.length;
+        const prevTime = GS.beatTimes[b - 1];
+        const bpmAtBeat = GS.baseBPM + Math.floor((b - 1) / 16) * 2;
+        GS.beatTimes[b] = prevTime + 60000 / bpmAtBeat;
+    }
+}
+
+function scheduleBeatsForBeat(beatNum) {
+    ensureBeatTimes(beatNum + 1);
+    const beatTime = GS.beatTimes[beatNum];
+    const nextBeatTime = GS.beatTimes[beatNum + 1];
+    const interval = nextBeatTime - beatTime;
+
+    const subDiv = getSubDivForBeat(beatNum);
+    for (let s = 0; s < subDiv; s++) {
+        const target = generateTarget(beatNum, s);
+        target.hitTime = beatTime + (s / subDiv) * interval;
+        GS.targets.push(target);
+    }
+}
+
+function getSubDivForBeat(beatNum) {
+    const bpmAtBeat = GS.baseBPM + Math.floor(beatNum / 16) * 2;
+    if (bpmAtBeat >= 180 && Math.random() < 0.3) return 4;
+    if (bpmAtBeat >= 160 && Math.random() < 0.4) return 3;
+    if (bpmAtBeat >= 140 && Math.random() < 0.5) return 2;
+    return 1;
+}
+
+function gameLoop(timestamp) {
+    if (!GS.running) return;
+
+    const dt = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+
+    if (!GS.paused) {
+        updateGame(timestamp, dt);
+    }
+
+    renderGame(timestamp);
+    updateStats();
+    animFrame = requestAnimationFrame(gameLoop);
+}
+
+function updateGame(now, dt) {
+    GS.beatInterval = 60000 / GS.bpm;
+
+    // Check for beats using pre-computed beat times
+    ensureBeatTimes(GS.nextBeatToFire + 1);
+    while (now >= GS.beatTimes[GS.nextBeatToFire]) {
+        GS.beatCount = GS.nextBeatToFire;
+        GS.lastBeatTime = GS.beatTimes[GS.beatCount];
+        GS.nextBeatToFire++;
+
+        // BPM ramp: +2 every 16 beats
+        GS.bpm = GS.baseBPM + Math.floor(GS.beatCount / 16) * 2;
+        GS.beatInterval = 60000 / GS.bpm;
+
+        // Check BPM milestones (fire once when crossing)
+        const milestones = [120, 140, 160, 180, 200];
+        if (GS.beatCount % 16 === 0 && milestones.includes(GS.bpm)) {
+            flashAllLEDs('purple', 300);
+        }
+
+        // Metronome click
+        const isDownbeat = GS.beatCount % 4 === 0;
+        playClick(isDownbeat);
+        playHeartbeat();
+
+        // Flash metronome LED on C4
+        setLED(60, 'white');
+        setTimeout(() => setLED(60, 'off'), 100);
+
+        // Update drone intensity
+        updateDrone();
+
+        // Generate more targets ahead
+        const needUpTo = GS.beatCount + 16;
+        while (GS.nextBeatToSchedule <= needUpTo) {
+            scheduleBeatsForBeat(GS.nextBeatToSchedule);
+            GS.nextBeatToSchedule++;
+        }
+
+        // Add score for survival
+        GS.score += Math.floor(GS.bpm * 0.1);
+
+        ensureBeatTimes(GS.nextBeatToFire + 1);
+    }
+
+    // Check for missed targets
+    for (let i = 0; i < GS.targets.length; i++) {
+        const t = GS.targets[i];
+        if (t.judged) continue;
+        if (now > t.hitTime + 150) {
+            // Missed
+            t.judged = true;
+            t.hit = false;
+            GS.missCount++;
+            GS.lives--;
+            addFeedback('miss');
+
+            // RED flash on target notes
+            setMultiLED(t.midi, 'red');
+            setTimeout(() => setMultiLED(t.midi, 'off'), 300);
+
+            if (GS.lives <= 0) {
+                endGame();
+                return;
+            }
+        }
+    }
+
+    // Update LED preview for upcoming target
+    const previewWindow = GS.beatInterval; // 1 beat ahead
+    for (let i = 0; i < GS.targets.length; i++) {
+        const t = GS.targets[i];
+        if (t.judged) continue;
+        const timeUntil = t.hitTime - now;
+        if (timeUntil > 0 && timeUntil <= previewWindow && !t._previewed) {
+            t._previewed = true;
+            setMultiLED(t.midi, 'cyan');
+            const notes = [...t.midi];
+            setTimeout(() => {
+                if (!t.judged) setMultiLED(notes, 'off');
+            }, Math.max(timeUntil - 50, 100));
+        }
+    }
+
+    // Cleanup old targets
+    while (GS.targets.length > 0 && GS.targets[0].judged && now - GS.targets[0].hitTime > 2000) {
+        GS.targets.shift();
+    }
+
+    // Update intensity & runner
+    GS.intensity = Math.min((GS.bpm - GS.baseBPM) / 120, 1);
+    GS.runnerProgress = Math.min(GS.beatCount / 500, 0.95);
+
+    // Pendulum - sync to beat phase
+    const beatPhaseP = ((now - GS.lastBeatTime) % GS.beatInterval) / GS.beatInterval;
+    GS.pendulumAngle = Math.sin(beatPhaseP * Math.PI * 2) * 0.6;
+}
+
+function flashAllLEDs(color, duration) {
+    for (let n = PK_START; n <= PK_END; n++) setLED(n, color);
+    setTimeout(() => clearAllLEDs(), duration);
+}
+
+function endGame() {
+    GS.running = false;
+    stopDrone();
+    clearAllLEDs();
+
+    if (GS.score > GS.highScore) {
+        GS.highScore = GS.score;
+        try { localStorage.setItem('metronome_marathon_high', GS.highScore); } catch(e) {}
+    }
+
+    const totalHits = GS.perfectCount + GS.goodCount + GS.missCount;
+    const accuracy = totalHits > 0 ? Math.round((GS.perfectCount + GS.goodCount) / totalHits * 100) : 0;
+
+    const overlay = document.getElementById('gameOverlay');
+    const title = document.getElementById('overlayTitle');
+    const sub = document.getElementById('overlaySub');
+    const btn = document.getElementById('startBtn');
+
+    title.textContent = 'Marathon Over!';
+    sub.innerHTML = `
+        <strong>Final BPM:</strong> ${GS.bpm}<br>
+        <strong>Beats Survived:</strong> ${GS.beatCount}<br>
+        <strong>Perfect:</strong> ${GS.perfectCount} &nbsp; <strong>Good:</strong> ${GS.goodCount} &nbsp; <strong>Miss:</strong> ${GS.missCount}<br>
+        <strong>Accuracy:</strong> ${accuracy}%<br>
+        <strong>Score:</strong> ${GS.score}<br>
+        <strong>High Score:</strong> ${GS.highScore}
+    `;
+    btn.textContent = 'Play Again';
+    overlay.classList.remove('hidden');
+
+    if (animFrame) cancelAnimationFrame(animFrame);
+}
+
+// ═══════════════════════════════════════
+// RENDERING
+// ═══════════════════════════════════════
+function renderGame(now) {
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Background gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0a0a1a');
+    bgGrad.addColorStop(1, '#0d1b2a');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Intensity red edge pulse
+    if (GS.intensity > 0.3) {
+        const alpha = (GS.intensity - 0.3) * 0.5 * (0.5 + 0.5 * Math.sin(now / 200));
+        ctx.fillStyle = `rgba(255, 50, 50, ${alpha})`;
+        ctx.fillRect(0, 0, 30, H);
+        ctx.fillRect(W - 30, 0, 30, H);
+        ctx.fillRect(0, 0, W, 15);
+        ctx.fillRect(0, H - 15, W, 15);
+    }
+
+    if (!GS.running) {
+        renderIdleScreen(now);
+        return;
+    }
+
+    // === Left Panel: Metronome Pendulum ===
+    renderPendulum(now);
+
+    // === Center: Note Timeline / Conveyor ===
+    renderTimeline(now);
+
+    // === Right Panel: Runner & Heat Gauge ===
+    renderRunner(now);
+    renderHeatGauge(now);
+
+    // === BPM Display ===
+    renderBPM(now);
+
+    // === Beat subdivision indicator ===
+    renderSubDiv(now);
+
+    // === Feedback effects ===
+    renderFeedbacks(now);
+
+    // === Lives ===
+    renderLives(now);
+}
+
+function renderIdleScreen(now) {
+    // Idle pendulum
+    const angle = Math.sin(now / 1500) * 0.4;
+    drawPendulum(160, 220, angle, 0.3);
+
+    ctx.fillStyle = '#334155';
+    ctx.font = '14px "Segoe UI"';
+    ctx.textAlign = 'center';
+    ctx.fillText('Connect MIDI and press Start', canvas.width / 2, canvas.height / 2 + 40);
+}
+
+function renderPendulum(now) {
+    const cx = 120;
+    const cy = 40;
+    drawPendulum(cx, cy, GS.pendulumAngle, GS.intensity);
+}
+
+function drawPendulum(cx, cy, angle, intensity) {
+    const length = 160;
+    const endX = cx + Math.sin(angle) * length;
+    const endY = cy + Math.cos(angle) * length;
+
+    // Pivot
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#64748b';
+    ctx.fill();
+
+    // Arm
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(endX, endY);
+    ctx.strokeStyle = `rgba(148, 163, 184, ${0.6 + intensity * 0.4})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Bob
+    const bobR = 12 + intensity * 6;
+    const glow = intensity * 0.6;
+    ctx.beginPath();
+    ctx.arc(endX, endY, bobR, 0, Math.PI * 2);
+
+    const r = Math.floor(100 + intensity * 155);
+    const g = Math.floor(200 - intensity * 150);
+    const b = Math.floor(200 - intensity * 180);
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.fill();
+
+    if (glow > 0.1) {
+        ctx.shadowBlur = 20 * glow;
+        ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${glow})`;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    // Tick marks
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    for (let i = -3; i <= 3; i++) {
+        const a = i * 0.15;
+        const tx = cx + Math.sin(a) * (length + 20);
+        const ty = cy + Math.cos(a) * (length + 20);
+        const tx2 = cx + Math.sin(a) * (length + 30);
+        const ty2 = cy + Math.cos(a) * (length + 30);
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx2, ty2);
+        ctx.stroke();
+    }
+}
+
+function renderTimeline(now) {
+    const tlLeft = 250;
+    const tlRight = 850;
+    const tlY = 220;
+    const tlWidth = tlRight - tlLeft;
+    const hitX = tlLeft + 80; // where the "hit zone" is
+
+    // Timeline track
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(tlLeft, tlY - 40, tlWidth, 80);
+
+    // Beat grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    const beatPx = tlWidth / 8; // show 8 beats worth
+    for (let i = 0; i < 9; i++) {
+        const x = tlLeft + i * beatPx;
+        ctx.beginPath();
+        ctx.moveTo(x, tlY - 40);
+        ctx.lineTo(x, tlY + 40);
+        ctx.stroke();
+    }
+
+    // Hit zone glow
+    const hitGlow = 0.3 + 0.2 * Math.sin(now / 300);
+    ctx.fillStyle = `rgba(0, 245, 212, ${hitGlow})`;
+    ctx.fillRect(hitX - 4, tlY - 42, 8, 84);
+
+    // "HIT" label
+    ctx.fillStyle = '#00f5d4';
+    ctx.font = 'bold 10px "Segoe UI"';
+    ctx.textAlign = 'center';
+    ctx.fillText('HIT', hitX, tlY + 55);
+
+    // Render targets on timeline
+    for (let i = 0; i < GS.targets.length; i++) {
+        const t = GS.targets[i];
+        const timeUntil = t.hitTime - now;
+        const windowMs = GS.beatInterval * 8;
+
+        // Position: hitX is 0ms, right edge is +windowMs
+        const xPos = hitX + (timeUntil / windowMs) * (tlRight - hitX);
+
+        if (xPos < tlLeft - 50 || xPos > tlRight + 50) continue;
+
+        let color, alpha;
+        if (t.judged && t.hit) {
+            color = '#44ff44';
+            alpha = Math.max(0, 1 - (now - t.hitTime) / 500);
+        } else if (t.judged && !t.hit) {
+            color = '#ff4444';
+            alpha = Math.max(0, 1 - (now - t.hitTime) / 500);
+        } else {
+            // Upcoming
+            const proximity = 1 - Math.abs(timeUntil) / windowMs;
+            color = '#00f5d4';
+            alpha = 0.4 + proximity * 0.6;
+        }
+
+        if (alpha <= 0) continue;
+
+        // Draw note block
+        const blockH = t.midi.length > 1 ? 35 : 25;
+        const blockW = t.midi.length > 1 ? 50 : 35;
+
+        ctx.fillStyle = color;
+        ctx.globalAlpha = alpha;
+
+        // Rounded rect
+        const rx = xPos - blockW / 2;
+        const ry = tlY - blockH / 2;
+        ctx.beginPath();
+        ctx.roundRect(rx, ry, blockW, blockH, 6);
+        ctx.fill();
+
+        // Glow for approaching targets
+        if (!t.judged && Math.abs(timeUntil) < GS.beatInterval) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // Note name
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${t.midi.length > 1 ? 10 : 11}px "Segoe UI"`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(t.name, xPos, tlY);
+
+        ctx.globalAlpha = 1;
+    }
+
+    ctx.textBaseline = 'alphabetic';
+}
+
+function renderRunner(now) {
+    const trackLeft = 250;
+    const trackRight = 850;
+    const trackY = 400;
+    const trackW = trackRight - trackLeft;
+
+    // Track line
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(trackLeft, trackY);
+    ctx.lineTo(trackRight, trackY);
+    ctx.stroke();
+
+    // Distance markers
+    ctx.fillStyle = '#475569';
+    ctx.font = '9px "Segoe UI"';
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 5; i++) {
+        const x = trackLeft + (i / 5) * trackW;
+        ctx.fillText(`${i * 100}m`, x, trackY + 15);
+        ctx.beginPath();
+        ctx.arc(x, trackY, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Runner
+    const runX = trackLeft + GS.runnerProgress * trackW;
+    const bounce = Math.abs(Math.sin(now / (200 - GS.intensity * 100))) * 8;
+
+    // Simple stick figure runner
+    const ry = trackY - 15 - bounce;
+
+    // Body
+    ctx.strokeStyle = '#00f5d4';
+    ctx.lineWidth = 2;
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(runX, ry - 12, 5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Torso
+    ctx.beginPath();
+    ctx.moveTo(runX, ry - 7);
+    ctx.lineTo(runX, ry + 5);
+    ctx.stroke();
+
+    // Legs (animated)
+    const legPhase = now / (150 - GS.intensity * 60);
+    const legSpread = 6;
+    ctx.beginPath();
+    ctx.moveTo(runX, ry + 5);
+    ctx.lineTo(runX + Math.sin(legPhase) * legSpread, ry + 14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(runX, ry + 5);
+    ctx.lineTo(runX - Math.sin(legPhase) * legSpread, ry + 14);
+    ctx.stroke();
+
+    // Arms
+    ctx.beginPath();
+    ctx.moveTo(runX, ry - 3);
+    ctx.lineTo(runX + Math.cos(legPhase) * 5, ry + 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(runX, ry - 3);
+    ctx.lineTo(runX - Math.cos(legPhase) * 5, ry + 2);
+    ctx.stroke();
+
+    // Trail
+    const trailLen = 30 + GS.intensity * 40;
+    const trailGrad = ctx.createLinearGradient(runX - trailLen, trackY, runX, trackY);
+    trailGrad.addColorStop(0, 'rgba(0, 245, 212, 0)');
+    trailGrad.addColorStop(1, `rgba(0, 245, 212, ${0.2 + GS.intensity * 0.3})`);
+    ctx.fillStyle = trailGrad;
+    ctx.fillRect(runX - trailLen, trackY - 3, trailLen, 6);
+}
+
+function renderHeatGauge(now) {
+    const gx = 920;
+    const gy = 60;
+    const gw = 25;
+    const gh = 300;
+
+    // Background
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    ctx.beginPath();
+    ctx.roundRect(gx, gy, gw, gh, 8);
+    ctx.fill();
+
+    // Fill
+    const fillH = GS.intensity * gh;
+    const grad = ctx.createLinearGradient(gx, gy + gh, gx, gy);
+    grad.addColorStop(0, '#10b981');
+    grad.addColorStop(0.4, '#eab308');
+    grad.addColorStop(0.7, '#f97316');
+    grad.addColorStop(1, '#ef4444');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(gx, gy + gh - fillH, gw, fillH, [0, 0, 8, 8]);
+    ctx.fill();
+
+    // Glow at high intensity
+    if (GS.intensity > 0.6) {
+        const pulse = 0.3 + 0.3 * Math.sin(now / 200);
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = `rgba(239, 68, 68, ${pulse})`;
+        ctx.fillStyle = `rgba(239, 68, 68, ${pulse * 0.3})`;
+        ctx.beginPath();
+        ctx.roundRect(gx - 3, gy + gh - fillH - 3, gw + 6, fillH + 6, 10);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    // Label
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px "Segoe UI"';
+    ctx.textAlign = 'center';
+    ctx.fillText('HEAT', gx + gw / 2, gy + gh + 18);
+
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(gx, gy, gw, gh, 8);
+    ctx.stroke();
+}
+
+function renderBPM(now) {
+    const x = 530;
+    const y = 35;
+
+    // Color based on BPM
+    let bpmColor;
+    if (GS.bpm < 120) bpmColor = '#10b981';
+    else if (GS.bpm < 140) bpmColor = '#eab308';
+    else if (GS.bpm < 160) bpmColor = '#f97316';
+    else bpmColor = '#ef4444';
+
+    // Heartbeat scale effect
+    const beatPhase = ((now - GS.lastBeatTime) % GS.beatInterval) / GS.beatInterval;
+    const scale = 1 + (beatPhase < 0.15 ? (0.15 - beatPhase) * 1.5 : 0) * (GS.intensity * 0.5 + 0.5);
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = bpmColor;
+    ctx.font = 'bold 36px "Segoe UI"';
+    ctx.textAlign = 'center';
+
+    // Glow
+    ctx.shadowBlur = 10 + GS.intensity * 15;
+    ctx.shadowColor = bpmColor;
+    ctx.fillText(`${GS.bpm} BPM`, 0, 0);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+
+    // Subdivision label
+    const subLabels = { 1: '', 2: '8th Notes', 3: 'Triplets', 4: '16th Notes' };
+    const currentSub = getCurrentSubDiv();
+    if (currentSub > 1) {
+        ctx.fillStyle = '#a78bfa';
+        ctx.font = '12px "Segoe UI"';
+        ctx.textAlign = 'center';
+        ctx.fillText(subLabels[currentSub] || '', x, y + 18);
+    }
+}
+
+function getCurrentSubDiv() {
+    if (GS.bpm >= 180) return 4;
+    if (GS.bpm >= 160) return 3;
+    if (GS.bpm >= 140) return 2;
+    return 1;
+}
+
+function renderSubDiv(now) {
+    const cx = 530;
+    const y = 145;
+    const subDiv = getCurrentSubDiv();
+    const dotR = 6;
+    const spacing = 25;
+    const totalW = (subDiv - 1) * spacing;
+
+    // Current beat phase
+    const beatPhase = ((now - GS.lastBeatTime) % GS.beatInterval) / GS.beatInterval;
+    const activeDot = Math.floor(beatPhase * subDiv);
+
+    for (let i = 0; i < subDiv; i++) {
+        const dx = cx - totalW / 2 + i * spacing;
+        ctx.beginPath();
+        ctx.arc(dx, y, dotR, 0, Math.PI * 2);
+
+        if (i === activeDot) {
+            ctx.fillStyle = '#00f5d4';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#00f5d4';
+        } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.shadowBlur = 0;
+        }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+function renderFeedbacks(now) {
+    for (let i = GS.feedbacks.length - 1; i >= 0; i--) {
+        const fb = GS.feedbacks[i];
+        const age = now - fb.time;
+        if (age > 800) {
+            GS.feedbacks.splice(i, 1);
+            continue;
+        }
+
+        const alpha = 1 - age / 800;
+        const yOff = -age * 0.05;
+
+        ctx.save();
+        ctx.translate(fb.x, fb.y + yOff);
+        ctx.globalAlpha = alpha;
+
+        if (fb.type === 'perfect') {
+            // Golden starburst
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 24px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ffd700';
+            ctx.fillText('PERFECT!', 0, 0);
+
+            // Starburst rays
+            const rayCount = 8;
+            const rayLen = 15 + age * 0.05;
+            ctx.strokeStyle = `rgba(255, 215, 0, ${alpha * 0.6})`;
+            ctx.lineWidth = 2;
+            for (let r = 0; r < rayCount; r++) {
+                const a = (r / rayCount) * Math.PI * 2 + age * 0.005;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(a) * 20, Math.sin(a) * 20 - 8);
+                ctx.lineTo(Math.cos(a) * (20 + rayLen), Math.sin(a) * (20 + rayLen) - 8);
+                ctx.stroke();
+            }
+        } else if (fb.type === 'good') {
+            ctx.fillStyle = '#44ff44';
+            ctx.font = 'bold 20px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#44ff44';
+            ctx.fillText('GOOD', 0, 0);
+        } else {
+            ctx.fillStyle = '#ff4444';
+            ctx.font = 'bold 28px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff4444';
+            ctx.fillText('MISS', 0, 0);
+
+            // Red X
+            ctx.strokeStyle = `rgba(255, 68, 68, ${alpha})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-15, -25);
+            ctx.lineTo(15, -5);
+            ctx.moveTo(15, -25);
+            ctx.lineTo(-15, -5);
+            ctx.stroke();
+        }
+
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+}
+
+function renderLives(now) {
+    const x = 45;
+    const y = 420;
+
+    ctx.font = '24px "Segoe UI"';
+    ctx.textAlign = 'left';
+    for (let i = 0; i < GS.maxLives; i++) {
+        if (i < GS.lives) {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#ff6b6b';
+        } else {
+            ctx.fillStyle = '#334155';
+            ctx.shadowBlur = 0;
+        }
+        ctx.fillText('\u2665', x + i * 30, y);
+    }
+    ctx.shadowBlur = 0;
+
+    // Label
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px "Segoe UI"';
+    ctx.fillText('LIVES', x, y + 15);
+}
+
+// ═══════════════════════════════════════
+// STATS DISPLAY
+// ═══════════════════════════════════════
+function updateStats() {
+    document.getElementById('statBPM').textContent = GS.running ? GS.bpm : '--';
+    document.getElementById('statBeats').textContent = GS.beatCount;
+
+    let hearts = '';
+    for (let i = 0; i < GS.maxLives; i++) hearts += i < GS.lives ? '\u2665' : '\u2661';
+    document.getElementById('statLives').textContent = hearts;
+    document.getElementById('statLives').style.color = GS.lives <= 1 ? '#ff6b6b' : 'var(--accent)';
+
+    document.getElementById('statScore').textContent = GS.score;
+    document.getElementById('statHigh').textContent = GS.highScore;
+
+    // BPM stat color
+    const bpmEl = document.getElementById('statBPM');
+    if (GS.bpm < 120) bpmEl.style.color = '#10b981';
+    else if (GS.bpm < 140) bpmEl.style.color = '#eab308';
+    else if (GS.bpm < 160) bpmEl.style.color = '#f97316';
+    else bpmEl.style.color = '#ef4444';
+}
+
+// ═══════════════════════════════════════
+// VIRTUAL KEYBOARD
+// ═══════════════════════════════════════
+function buildKeyboard() {
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+
+    for (let midi = PK_START; midi <= PK_END; midi++) {
+        const noteName = NOTE_NAMES[midi % 12];
+        const octave = Math.floor(midi / 12) - 1;
+        const isBlack = noteName.includes('#');
+
+        const key = document.createElement('div');
+        key.className = `key ${isBlack ? 'black' : 'white'}`;
+        key.dataset.midi = midi;
+
+        const label = document.createElement('span');
+        label.className = 'note-label';
+        label.textContent = noteName.replace('#', '#') + octave;
+        key.appendChild(label);
+
+        // Virtual click support
+        key.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            onNoteOn(midi);
+        });
+        key.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            onNoteOff(midi);
+        });
+        key.addEventListener('mouseleave', (e) => {
+            if (GS.heldNotes.has(midi)) onNoteOff(midi);
+        });
+
+        // Touch support
+        key.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            onNoteOn(midi);
+        });
+        key.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            onNoteOff(midi);
+        });
+
+        kb.appendChild(key);
+    }
+}
+
+// ═══════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (GS.running) {
+            GS.paused = !GS.paused;
+            if (GS.paused) {
+                document.getElementById('gameOverlay').classList.remove('hidden');
+                document.getElementById('overlayTitle').textContent = 'Paused';
+                document.getElementById('overlaySub').textContent = 'Press Space to resume';
+                document.getElementById('startBtn').textContent = 'Resume';
+                document.getElementById('startBtn').onclick = () => {
+                    GS.paused = false;
+                    document.getElementById('gameOverlay').classList.add('hidden');
+                    document.getElementById('startBtn').onclick = startGame;
+                };
+            } else {
+                document.getElementById('gameOverlay').classList.add('hidden');
+            }
+        }
+    } else if (e.code === 'KeyR') {
+        if (GS.running || !document.getElementById('gameOverlay').classList.contains('hidden')) {
+            GS.running = false;
+            stopDrone();
+            clearAllLEDs();
+            if (animFrame) cancelAnimationFrame(animFrame);
+
+            document.getElementById('gameOverlay').classList.remove('hidden');
+            document.getElementById('overlayTitle').textContent = 'Metronome Marathon';
+            document.getElementById('overlaySub').innerHTML = 'Match the rhythm. Play the right notes on the beat.<br>BPM ramps up. Subdivisions get trickier. Three misses and you\'re out.';
+            document.getElementById('startBtn').textContent = 'Start';
+            document.getElementById('startBtn').onclick = startGame;
+        }
+    } else if (e.code === 'Escape') {
+        if (GS.running) {
+            endGame();
+        }
+    }
+});
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+buildKeyboard();
+
+// Start idle render loop
+function idleLoop(ts) {
+    if (!GS.running) {
+        renderGame(ts);
+        requestAnimationFrame(idleLoop);
+    }
+}
+requestAnimationFrame(idleLoop);
+
+// Load high score from localStorage
+try {
+    const saved = localStorage.getItem('metronome_marathon_high');
+    if (saved) GS.highScore = parseInt(saved) || 0;
+} catch(e) {}
+
+</script>
+</body>
+</html>

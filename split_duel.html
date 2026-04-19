@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Split Duel - MIDI Battle Arena</title>
+<style>
+:root {
+  --bg1: #0a0a1a; --bg2: #0d1b2a; --accent: #00f5d4; --danger: #ff6b6b;
+  --text: #e0e0e0; --card-bg: rgba(255,255,255,0.05);
+  --p1: #ff4444; --p1bg: rgba(255,68,68,0.08); --p1glow: rgba(255,68,68,0.3);
+  --p2: #4488ff; --p2bg: rgba(68,136,255,0.08); --p2glow: rgba(68,136,255,0.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg1); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; overflow-x:hidden; min-height:100vh; }
+#app { max-width:1100px; margin:0 auto; padding:10px 15px 20px; }
+
+/* Header */
+.header { text-align:center; padding:8px 0 4px; position:relative; }
+.header h1 { font-size:2.2rem; font-weight:900; letter-spacing:4px;
+  background:linear-gradient(90deg,var(--p1),#fff 40%,#fff 60%,var(--p2));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.header .subtitle { font-size:0.75rem; color:#888; letter-spacing:6px; text-transform:uppercase; }
+
+/* MIDI Bar */
+.midi-bar { display:flex; align-items:center; justify-content:center; gap:12px;
+  padding:6px 14px; background:var(--card-bg); border-radius:8px; margin:6px 0; font-size:0.8rem; }
+.midi-dot { width:8px; height:8px; border-radius:50%; background:#555; }
+.midi-dot.connected { background:#0f0; box-shadow:0 0 6px #0f0; }
+
+/* Controls */
+.controls { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:6px 0; }
+.ctrl-group { display:flex; align-items:center; gap:4px; background:var(--card-bg); padding:4px 10px; border-radius:6px; }
+.ctrl-group label { font-size:0.7rem; color:#999; margin-right:4px; }
+.ctrl-group select, .ctrl-group button { background:#1a1a2e; color:var(--text); border:1px solid #333;
+  padding:3px 8px; border-radius:4px; font-size:0.75rem; cursor:pointer; }
+.ctrl-group button:hover { border-color:var(--accent); }
+.ctrl-group button.active { background:var(--accent); color:#000; border-color:var(--accent); }
+
+/* Score Bar */
+.score-bar { display:flex; align-items:center; justify-content:center; gap:0; margin:6px 0; }
+.score-side { flex:1; display:flex; align-items:center; padding:8px 16px; }
+.score-side.p1 { justify-content:flex-end; background:linear-gradient(90deg,transparent,var(--p1bg)); border-radius:8px 0 0 8px; }
+.score-side.p2 { justify-content:flex-start; background:linear-gradient(270deg,transparent,var(--p2bg)); border-radius:0 8px 8px 0; }
+.score-name { font-size:0.9rem; font-weight:700; margin:0 12px; }
+.score-side.p1 .score-name { color:var(--p1); }
+.score-side.p2 .score-name { color:var(--p2); }
+.score-num { font-size:2.2rem; font-weight:900; line-height:1; }
+.score-side.p1 .score-num { color:var(--p1); }
+.score-side.p2 .score-num { color:var(--p2); }
+.score-vs { background:#111; border:2px solid #333; border-radius:50%; width:40px; height:40px;
+  display:flex; align-items:center; justify-content:center; font-weight:900; font-size:0.8rem;
+  color:var(--accent); z-index:2; flex-shrink:0; }
+.round-dots { display:flex; gap:3px; margin:0 8px; }
+.round-dot { width:8px; height:8px; border-radius:50%; border:1px solid #555; }
+.round-dot.won { background:currentColor; border-color:currentColor; }
+.score-side.p1 .round-dot { color:var(--p1); }
+.score-side.p2 .round-dot { color:var(--p2); }
+
+/* Canvas */
+.canvas-wrap { position:relative; margin:6px 0; border-radius:10px; overflow:hidden;
+  border:1px solid #222; background:#050510; }
+canvas { display:block; width:100%; }
+
+/* Keyboard */
+.keyboard-wrap { margin:6px 0; }
+.keyboard { display:flex; justify-content:center; gap:1px; padding:6px; background:var(--card-bg); border-radius:8px; }
+.key { width:27px; height:80px; border-radius:0 0 4px 4px; cursor:pointer; position:relative;
+  transition: background 0.1s, box-shadow 0.1s; border:1px solid #222; }
+.key.white { background:#1a1a2e; }
+.key.black { background:#0a0a14; height:52px; width:20px; margin:0 -10px; z-index:2;
+  border-radius:0 0 3px 3px; border-color:#111; }
+.key.p1.white { background:linear-gradient(180deg,#1a0a0a,#1a1a2e); border-color:#331111; }
+.key.p2.white { background:linear-gradient(180deg,#0a0a1a,#0a1a2e); border-color:#112233; }
+.key.p1.black { background:#140808; border-color:#220a0a; }
+.key.p2.black { background:#080814; border-color:#0a0a22; }
+.key.target { box-shadow:0 0 8px var(--accent) !important; border-color:var(--accent) !important; }
+.key.correct { background:#0f0 !important; box-shadow:0 0 12px #0f0 !important; }
+.key.wrong { background:#f00 !important; box-shadow:0 0 12px #f00 !important; }
+.key.pressed { background:#fff !important; box-shadow:0 0 10px #fff !important; }
+.key-label { position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+  font-size:0.5rem; color:#666; pointer-events:none; }
+.key.black .key-label { color:#444; }
+.kb-divider { width:3px; background:linear-gradient(180deg,var(--accent),transparent); margin:0 2px;
+  border-radius:2px; align-self:stretch; }
+
+/* Audio Controls */
+.audio-controls { display:flex; gap:10px; justify-content:center; align-items:center; margin:4px 0; }
+.audio-controls label { font-size:0.7rem; color:#888; }
+.audio-controls input[type=range] { width:70px; accent-color:var(--accent); }
+.audio-controls button { background:#1a1a2e; color:var(--text); border:1px solid #333;
+  padding:2px 10px; border-radius:4px; font-size:0.7rem; cursor:pointer; }
+
+/* Shortcuts */
+.shortcuts { text-align:center; font-size:0.65rem; color:#555; margin-top:4px; }
+.shortcuts kbd { background:#1a1a2e; padding:1px 5px; border-radius:3px; border:1px solid #333; margin:0 2px; }
+
+/* Status */
+.status-text { text-align:center; font-size:0.85rem; color:var(--accent); margin:4px 0; min-height:1.2em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <h1>SPLIT DUEL</h1>
+    <div class="subtitle">MIDI Battle Arena</div>
+  </div>
+
+  <div class="midi-bar">
+    <div class="midi-dot" id="midiDot"></div>
+    <span id="midiStatus">MIDI: Click to connect</span>
+    <button onclick="initMIDI()" style="background:#1a1a2e;color:var(--text);border:1px solid #333;padding:2px 8px;border-radius:4px;font-size:0.7rem;cursor:pointer;">Connect</button>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-group">
+      <label>MODE</label>
+      <select id="modeSelect" onchange="setMode(this.value)">
+        <option value="speed">Speed Match</option>
+        <option value="echo">Echo Battle</option>
+        <option value="quiz">Quiz Duel</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>DIFFICULTY</label>
+      <select id="diffSelect" onchange="setDifficulty(this.value)">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <button id="startBtn" onclick="startMatch()">START</button>
+      <button onclick="resetMatch()">RESET</button>
+    </div>
+  </div>
+
+  <div class="score-bar">
+    <div class="score-side p1">
+      <div class="round-dots" id="p1dots"></div>
+      <span class="score-num" id="p1score">0</span>
+      <span class="score-name">P1</span>
+    </div>
+    <div class="score-vs">VS</div>
+    <div class="score-side p2">
+      <span class="score-name">P2</span>
+      <span class="score-num" id="p2score">0</span>
+      <div class="round-dots" id="p2dots"></div>
+    </div>
+  </div>
+
+  <div class="status-text" id="statusText">Select mode and press START</div>
+
+  <div class="canvas-wrap">
+    <canvas id="gameCanvas" width="1060" height="500"></canvas>
+  </div>
+
+  <div class="keyboard-wrap">
+    <div class="keyboard" id="keyboard"></div>
+  </div>
+
+  <div class="audio-controls">
+    <label>BGM</label><input type="range" id="bgmVol" min="0" max="100" value="35" oninput="setBGMVol(this.value)">
+    <label>SFX</label><input type="range" id="sfxVol" min="0" max="100" value="60" oninput="setSFXVol(this.value)">
+    <label>Keys</label><input type="range" id="keysVol" min="0" max="100" value="50" oninput="setKeysVol(this.value)">
+    <button id="muteBtn" onclick="toggleMute()">Mute All</button>
+  </div>
+
+  <div class="shortcuts">
+    <kbd>Space</kbd> Start/Pause &nbsp; <kbd>R</kbd> Rematch &nbsp; <kbd>Esc</kbd> Quit
+  </div>
+</div>
+
+<script>
+// ===== CONSTANTS =====
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const P1_MIN = 48, P1_MAX = 64, P2_MIN = 65, P2_MAX = 83;
+const CHORD_TYPES = {
+  'major':[0,4,7], 'minor':[0,3,7], '7th':[0,4,7,10], 'maj7':[0,4,7,11],
+  'min7':[0,3,7,10], 'dim':[0,3,6], 'aug':[0,4,8], 'sus4':[0,5,7], 'sus2':[0,2,7]
+};
+const LED_COLORS = { off:0, red:10, green:30, blue:50, yellow:70, cyan:90, purple:110, white:125 };
+const WIN_SCORE = 6;
+const ROUND_TIMEOUT = 8000;
+const COUNTDOWN_TIME = 3000;
+
+// ===== STATE =====
+let midiIn = null, midiOut = null;
+let audioCtx = null, masterGain, bgmGain, sfxGain, keysGain;
+let gameMode = 'speed', difficulty = 'medium';
+let p1Score = 0, p2Score = 0, roundNum = 0;
+let matchActive = false, roundActive = false, paused = false;
+let currentChallenge = null, roundTimer = null, countdownTimer = null;
+let p1Pressed = new Set(), p2Pressed = new Set();
+let echoPhase = 'listen', echoLeader = 1, echoSequence = [], echoInput = [];
+let echoRecording = false, echoPlaybackDone = false;
+let activeOscillators = new Map();
+let particles = [], screenShake = 0, vsLightning = 0;
+let challengeAnim = 0, winnerAnim = 0, winnerPlayer = 0;
+let matchWinner = 0, celebrationTimer = 0;
+let bgmOsc = null, bgmInterval = null, bgmPlaying = false;
+let isMuted = false;
+let canvas, ctx;
+let animFrame;
+let roundStartTime = 0;
+let quizPlayed = false;
+
+// ===== MIDI =====
+async function initMIDI() {
+  try {
+    const access = await navigator.requestMIDIAccess({ sysex: false });
+    access.inputs.forEach(input => {
+      midiIn = input;
+      input.onmidimessage = onMIDIMessage;
+    });
+    access.outputs.forEach(output => { midiOut = output; });
+    document.getElementById('midiDot').classList.add('connected');
+    document.getElementById('midiStatus').textContent = 'MIDI: ' + (midiIn ? midiIn.name : 'Connected');
+    if (midiOut) setIdleLEDs();
+  } catch(e) {
+    document.getElementById('midiStatus').textContent = 'MIDI: ' + e.message;
+  }
+}
+
+function sendLED(note, color) {
+  if (!midiOut) return;
+  if (color === 0) { midiOut.send([0x80, note, 0]); }
+  else { midiOut.send([0x90, note, color]); }
+}
+
+function setIdleLEDs() {
+  for (let n = P1_MIN; n <= P1_MAX; n++) sendLED(n, LED_COLORS.red);
+  for (let n = P2_MIN; n <= P2_MAX; n++) sendLED(n, LED_COLORS.blue);
+}
+
+function clearAllLEDs() {
+  for (let n = P1_MIN; n <= P2_MAX; n++) sendLED(n, 0);
+}
+
+function flashLED(note, color, dur=200) {
+  sendLED(note, color);
+  setTimeout(() => {
+    if (matchActive) {
+      if (note >= P1_MIN && note <= P1_MAX) sendLED(note, LED_COLORS.red);
+      else sendLED(note, LED_COLORS.blue);
+    } else sendLED(note, 0);
+  }, dur);
+}
+
+function setTargetLEDs(p1Notes, p2Notes) {
+  for (const n of p1Notes) sendLED(n, LED_COLORS.cyan);
+  for (const n of p2Notes) sendLED(n, LED_COLORS.cyan);
+}
+
+function cascadeLEDs(startNote, endNote, color, delayPer=30) {
+  for (let i = startNote; i <= endNote; i++) {
+    setTimeout(() => sendLED(i, color), (i - startNote) * delayPer);
+  }
+}
+
+function rainbowCascade(startNote, endNote) {
+  const colors = [LED_COLORS.red, LED_COLORS.yellow, LED_COLORS.green, LED_COLORS.cyan, LED_COLORS.blue, LED_COLORS.purple];
+  for (let i = startNote; i <= endNote; i++) {
+    const ci = (i - startNote) % colors.length;
+    setTimeout(() => sendLED(i, colors[ci]), (i - startNote) * 40);
+  }
+}
+
+// ===== AUDIO =====
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain(); masterGain.gain.value = 1.0;
+  masterGain.connect(audioCtx.destination);
+  bgmGain = audioCtx.createGain(); bgmGain.gain.value = 0.35;
+  bgmGain.connect(masterGain);
+  sfxGain = audioCtx.createGain(); sfxGain.gain.value = 0.6;
+  sfxGain.connect(masterGain);
+  keysGain = audioCtx.createGain(); keysGain.gain.value = 0.5;
+  keysGain.connect(masterGain);
+}
+
+function noteFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+function playNote(midi, player=0, vel=0.5, dur=0.8) {
+  if (!audioCtx) initAudio();
+  const freq = noteFreq(midi);
+  const now = audioCtx.currentTime;
+  const harmonics = [1, 2, 3, 4, 5];
+  const amps = player === 1
+    ? [0.5, 0.25, 0.12, 0.08, 0.04]   // warmer
+    : [0.4, 0.3, 0.15, 0.1, 0.06];     // brighter
+  const nodes = [];
+  harmonics.forEach((h, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = i === 0 ? 'sine' : 'sine';
+    osc.frequency.value = freq * h;
+    // slight detune for richness
+    if (i > 0) osc.detune.value = (player === 1 ? -2 : 2) * i;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(amps[i] * vel, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(amps[i] * vel * 0.6, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    osc.connect(gain);
+    gain.connect(keysGain);
+    osc.start(now);
+    osc.stop(now + dur + 0.05);
+    nodes.push({ osc, gain });
+  });
+  const key = midi + '_' + Date.now();
+  activeOscillators.set(key, nodes);
+  setTimeout(() => activeOscillators.delete(key), (dur + 0.1) * 1000);
+}
+
+function playSFX(type) {
+  if (!audioCtx) initAudio();
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(sfxGain);
+  switch(type) {
+    case 'correct':
+      osc.type = 'sine'; osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.3, now);
+      osc.frequency.linearRampToValueAtTime(1320, now + 0.15);
+      gain.gain.linearRampToValueAtTime(0, now + 0.3);
+      osc.start(now); osc.stop(now + 0.35);
+      break;
+    case 'wrong':
+      osc.type = 'sawtooth'; osc.frequency.value = 200;
+      gain.gain.setValueAtTime(0.2, now);
+      osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+      gain.gain.linearRampToValueAtTime(0, now + 0.25);
+      osc.start(now); osc.stop(now + 0.3);
+      break;
+    case 'countdown':
+      osc.type = 'sine'; osc.frequency.value = 660;
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.15);
+      osc.start(now); osc.stop(now + 0.2);
+      break;
+    case 'go':
+      osc.type = 'sine'; osc.frequency.value = 1320;
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.3);
+      osc.start(now); osc.stop(now + 0.35);
+      break;
+    case 'victory':
+      [0, 0.15, 0.3, 0.5].forEach((t, i) => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(sfxGain);
+        o.type = 'sine';
+        o.frequency.value = [523, 659, 784, 1047][i];
+        g.gain.setValueAtTime(0.25, now + t);
+        g.gain.linearRampToValueAtTime(0, now + t + 0.4);
+        o.start(now + t); o.stop(now + t + 0.45);
+      });
+      break;
+    case 'point':
+      osc.type = 'triangle'; osc.frequency.value = 1000;
+      gain.gain.setValueAtTime(0.2, now);
+      osc.frequency.linearRampToValueAtTime(1500, now + 0.1);
+      gain.gain.linearRampToValueAtTime(0, now + 0.2);
+      osc.start(now); osc.stop(now + 0.25);
+      break;
+  }
+}
+
+// BGM
+function startBGM() {
+  if (!audioCtx) initAudio();
+  if (bgmPlaying) return;
+  bgmPlaying = true;
+  const bassNotes = [36, 38, 40, 41, 43, 45];
+  let bi = 0, tempo = 280;
+  function playBeat() {
+    if (!bgmPlaying) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = noteFreq(bassNotes[bi % bassNotes.length]);
+    g.gain.setValueAtTime(0.12, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc.connect(g); g.connect(bgmGain);
+    osc.start(now); osc.stop(now + 0.25);
+    // hi-hat
+    const noise = audioCtx.createOscillator();
+    const ng = audioCtx.createGain();
+    noise.type = 'square'; noise.frequency.value = 6000 + Math.random() * 2000;
+    ng.gain.setValueAtTime(0.03, now);
+    ng.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    noise.connect(ng); ng.connect(bgmGain);
+    noise.start(now); noise.stop(now + 0.06);
+    bi++;
+    // increase tempo as match progresses
+    const progress = (p1Score + p2Score) / (WIN_SCORE * 2);
+    tempo = 280 - progress * 80;
+    bgmInterval = setTimeout(playBeat, tempo);
+  }
+  playBeat();
+}
+
+function stopBGM() {
+  bgmPlaying = false;
+  if (bgmInterval) clearTimeout(bgmInterval);
+}
+
+function setBGMVol(v) { if (bgmGain) bgmGain.gain.value = v / 100; }
+function setSFXVol(v) { if (sfxGain) sfxGain.gain.value = v / 100; }
+function setKeysVol(v) { if (keysGain) keysGain.gain.value = v / 100; }
+function toggleMute() {
+  isMuted = !isMuted;
+  if (masterGain) masterGain.gain.value = isMuted ? 0 : 1;
+  document.getElementById('muteBtn').textContent = isMuted ? 'Unmute' : 'Mute All';
+}
+
+// ===== MIDI INPUT =====
+function onMIDIMessage(msg) {
+  const [status, note, vel] = msg.data;
+  const cmd = status & 0xF0;
+  if (cmd === 0x90 && vel > 0) {
+    onNoteOn(note, vel);
+  } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
+    onNoteOff(note);
+  }
+}
+
+function getPlayer(note) {
+  if (note >= P1_MIN && note <= P1_MAX) return 1;
+  if (note >= P2_MIN && note <= P2_MAX) return 2;
+  return 0;
+}
+
+function onNoteOn(note, vel) {
+  initAudio();
+  const player = getPlayer(note);
+  if (player === 0) return;
+
+  playNote(note, player, vel / 127);
+  highlightKey(note, 'pressed');
+
+  if (player === 1) p1Pressed.add(note);
+  else p2Pressed.add(note);
+
+  if (roundActive && !paused) {
+    handleInput(player, note);
+  }
+}
+
+function onNoteOff(note) {
+  const player = getPlayer(note);
+  if (player === 1) p1Pressed.delete(note);
+  else p2Pressed.delete(note);
+  unhighlightKey(note);
+}
+
+// ===== VIRTUAL KEYBOARD =====
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  for (let n = P1_MIN; n <= P2_MAX; n++) {
+    if (n === P2_MIN) {
+      const div = document.createElement('div');
+      div.className = 'kb-divider';
+      kb.appendChild(div);
+    }
+    const isBlack = [1,3,6,8,10].includes(n % 12);
+    const key = document.createElement('div');
+    const player = n <= P1_MAX ? 'p1' : 'p2';
+    key.className = `key ${isBlack ? 'black' : 'white'} ${player}`;
+    key.dataset.note = n;
+    const noteName = NOTE_NAMES[n % 12] + Math.floor(n / 12 - 1);
+    const lbl = document.createElement('span');
+    lbl.className = 'key-label';
+    lbl.textContent = isBlack ? '' : NOTE_NAMES[n % 12];
+    key.appendChild(lbl);
+    key.addEventListener('mousedown', () => { onNoteOn(n, 100); });
+    key.addEventListener('mouseup', () => { onNoteOff(n); });
+    key.addEventListener('mouseleave', () => { onNoteOff(n); });
+    kb.appendChild(key);
+  }
+}
+
+function highlightKey(note, cls) {
+  const key = document.querySelector(`.key[data-note="${note}"]`);
+  if (key) key.classList.add(cls);
+}
+function unhighlightKey(note) {
+  const key = document.querySelector(`.key[data-note="${note}"]`);
+  if (key) { key.classList.remove('pressed','correct','wrong','target'); }
+}
+function setKeyTarget(note) { highlightKey(note, 'target'); }
+function flashKey(note, cls, dur=300) {
+  highlightKey(note, cls);
+  setTimeout(() => unhighlightKey(note), dur);
+}
+function clearKeyHighlights() {
+  document.querySelectorAll('.key').forEach(k => k.classList.remove('target','correct','wrong','pressed'));
+}
+
+// ===== CHALLENGE GENERATION =====
+function noteName(midi) { return NOTE_NAMES[midi % 12] + Math.floor(midi / 12 - 1); }
+function noteNameShort(midi) { return NOTE_NAMES[midi % 12]; }
+
+function generateChallenge() {
+  const mode = gameMode;
+  const diff = difficulty;
+
+  if (mode === 'speed') return generateSpeedChallenge(diff);
+  if (mode === 'echo') return generateEchoChallenge(diff);
+  if (mode === 'quiz') return generateQuizChallenge(diff);
+}
+
+function randomRoot(min, max, maxChord=[0]) {
+  const highest = Math.max(...maxChord);
+  const top = max - highest;
+  return min + Math.floor(Math.random() * (top - min + 1));
+}
+
+function getChordPool(diff) {
+  if (diff === 'easy') return null; // single notes only
+  if (diff === 'medium') return ['major','minor','sus4'];
+  return Object.keys(CHORD_TYPES);
+}
+
+function generateSpeedChallenge(diff) {
+  const pool = getChordPool(diff);
+  if (!pool) {
+    // Single note
+    const p1Root = P1_MIN + Math.floor(Math.random() * (P1_MAX - P1_MIN + 1));
+    const interval = p1Root - P1_MIN;
+    const p2Root = P2_MIN + Math.min(interval, P2_MAX - P2_MIN);
+    return {
+      type: 'speed', label: noteNameShort(p1Root),
+      p1Notes: [p1Root], p2Notes: [p2Root],
+      displayText: 'Play: ' + noteNameShort(p1Root)
+    };
+  }
+  const chordName = pool[Math.floor(Math.random() * pool.length)];
+  const intervals = CHORD_TYPES[chordName];
+  const p1Root = randomRoot(P1_MIN, P1_MAX, intervals);
+  // transpose to P2 range
+  const offset = p1Root - P1_MIN;
+  const p2Root = P2_MIN + Math.min(offset, P2_MAX - Math.max(...intervals));
+  return {
+    type: 'speed',
+    label: noteNameShort(p1Root) + ' ' + chordName,
+    p1Notes: intervals.map(i => p1Root + i),
+    p2Notes: intervals.map(i => p2Root + i),
+    displayText: noteNameShort(p1Root) + ' ' + chordName
+  };
+}
+
+function generateEchoChallenge(diff) {
+  const len = diff === 'easy' ? 2 : diff === 'medium' ? 3 : 4;
+  const leaderMin = echoLeader === 1 ? P1_MIN : P2_MIN;
+  const leaderMax = echoLeader === 1 ? P1_MAX : P2_MAX;
+  const followerMin = echoLeader === 1 ? P2_MIN : P1_MIN;
+  const followerMax = echoLeader === 1 ? P2_MAX : P1_MAX;
+  const seq = [];
+  for (let i = 0; i < len; i++) {
+    seq.push(leaderMin + Math.floor(Math.random() * (leaderMax - leaderMin + 1)));
+  }
+  // compute transposed sequence for follower
+  const transposed = seq.map(n => {
+    const offset = n - leaderMin;
+    return followerMin + Math.min(offset, followerMax - followerMin);
+  });
+  return {
+    type: 'echo', label: 'Echo ' + len + ' notes',
+    leaderSeq: seq, followerSeq: transposed,
+    displayText: `P${echoLeader} plays ${len} notes, P${echoLeader === 1 ? 2 : 1} echoes!`
+  };
+}
+
+function generateQuizChallenge(diff) {
+  const pool = getChordPool(diff) || null;
+  if (!pool) {
+    // interval quiz
+    const intervals = [[3,'min 3rd'],[4,'maj 3rd'],[5,'4th'],[7,'5th'],[12,'octave']];
+    const pick = intervals[Math.floor(Math.random() * intervals.length)];
+    const p1Root = randomRoot(P1_MIN, P1_MAX, [pick[0]]);
+    const offset = p1Root - P1_MIN;
+    const p2Root = P2_MIN + Math.min(offset, P2_MAX - pick[0]);
+    return {
+      type: 'quiz', label: pick[1],
+      p1Notes: [p1Root, p1Root + pick[0]],
+      p2Notes: [p2Root, p2Root + pick[0]],
+      quizRoot1: p1Root, quizRoot2: p2Root,
+      displayText: 'What interval is this?'
+    };
+  }
+  const chordName = pool[Math.floor(Math.random() * pool.length)];
+  const intervals = CHORD_TYPES[chordName];
+  const p1Root = randomRoot(P1_MIN, P1_MAX, intervals);
+  const offset = p1Root - P1_MIN;
+  const p2Root = P2_MIN + Math.min(offset, P2_MAX - Math.max(...intervals));
+  return {
+    type: 'quiz', label: noteNameShort(p1Root) + ' ' + chordName,
+    p1Notes: intervals.map(i => p1Root + i),
+    p2Notes: intervals.map(i => p2Root + i),
+    quizRoot1: p1Root, quizRoot2: p2Root,
+    displayText: 'Name this chord!'
+  };
+}
+
+// ===== GAME LOGIC =====
+function setMode(m) { gameMode = m; }
+function setDifficulty(d) { difficulty = d; }
+
+function startMatch() {
+  initAudio();
+  if (matchActive && !paused) { paused = true; setStatus('PAUSED'); return; }
+  if (paused) { paused = false; setStatus('Resumed!'); return; }
+  p1Score = 0; p2Score = 0; roundNum = 0;
+  matchActive = true; paused = false; matchWinner = 0; celebrationTimer = 0;
+  updateScores();
+  startBGM();
+  if (midiOut) setIdleLEDs();
+  setStatus('Match started!');
+  startCountdown();
+}
+
+function resetMatch() {
+  matchActive = false; roundActive = false; paused = false;
+  matchWinner = 0; celebrationTimer = 0;
+  p1Score = 0; p2Score = 0; roundNum = 0;
+  clearTimeout(roundTimer); clearTimeout(countdownTimer);
+  p1Pressed.clear(); p2Pressed.clear();
+  clearKeyHighlights();
+  updateScores();
+  stopBGM();
+  if (midiOut) setIdleLEDs();
+  setStatus('Select mode and press START');
+  currentChallenge = null;
+  particles = [];
+}
+
+function startCountdown() {
+  roundActive = false;
+  currentChallenge = null;
+  clearKeyHighlights();
+  let count = 3;
+  challengeAnim = 0;
+  setStatus(count.toString());
+  playSFX('countdown');
+  countdownTimer = setInterval(() => {
+    count--;
+    if (count > 0) {
+      setStatus(count.toString());
+      playSFX('countdown');
+    } else {
+      clearInterval(countdownTimer);
+      playSFX('go');
+      startRound();
+    }
+  }, 1000);
+}
+
+function startRound() {
+  roundNum++;
+  roundActive = true;
+  challengeAnim = 1;
+  quizPlayed = false;
+  p1Pressed.clear(); p2Pressed.clear();
+  echoInput = [];
+  echoPhase = 'listen';
+  echoRecording = false;
+  echoPlaybackDone = false;
+
+  currentChallenge = generateChallenge();
+  setStatus(currentChallenge.displayText);
+  roundStartTime = Date.now();
+
+  // Set target LEDs
+  if (currentChallenge.type === 'speed') {
+    if (difficulty !== 'hard') {
+      setTargetLEDs(currentChallenge.p1Notes, currentChallenge.p2Notes);
+      currentChallenge.p1Notes.forEach(n => setKeyTarget(n));
+      currentChallenge.p2Notes.forEach(n => setKeyTarget(n));
+    }
+  } else if (currentChallenge.type === 'echo') {
+    // play the leader's sequence
+    playEchoSequence();
+  } else if (currentChallenge.type === 'quiz') {
+    // play the chord/interval after a short delay
+    setTimeout(() => playQuizAudio(), 500);
+  }
+
+  // Round timeout
+  roundTimer = setTimeout(() => {
+    if (roundActive) {
+      roundActive = false;
+      setStatus('Draw! Time ran out.');
+      clearKeyHighlights();
+      if (midiOut) setIdleLEDs();
+      if (matchActive) setTimeout(startCountdown, 2000);
+    }
+  }, ROUND_TIMEOUT);
+}
+
+function playEchoSequence() {
+  const seq = currentChallenge.leaderSeq;
+  setStatus(`P${echoLeader}: Play your phrase! (${seq.length} notes)`);
+  echoPhase = 'record';
+  echoRecording = true;
+  echoInput = [];
+  // Leader plays freely, we record their notes
+  // After they play enough notes, switch to follower
+}
+
+function playQuizAudio() {
+  if (!currentChallenge || currentChallenge.type !== 'quiz') return;
+  // Play the notes for both players to hear
+  const notes = currentChallenge.p1Notes;
+  notes.forEach((n, i) => {
+    setTimeout(() => playNote(n, 0, 0.6, 1.0), i * 200);
+  });
+  quizPlayed = true;
+}
+
+function handleInput(player, note) {
+  if (!currentChallenge) return;
+
+  if (currentChallenge.type === 'speed') {
+    handleSpeedInput(player, note);
+  } else if (currentChallenge.type === 'echo') {
+    handleEchoInput(player, note);
+  } else if (currentChallenge.type === 'quiz') {
+    handleQuizInput(player, note);
+  }
+}
+
+function handleSpeedInput(player, note) {
+  const target = player === 1 ? currentChallenge.p1Notes : currentChallenge.p2Notes;
+  const pressed = player === 1 ? p1Pressed : p2Pressed;
+
+  // Check if all target notes are pressed
+  const allPressed = target.every(n => pressed.has(n));
+  // Check for wrong notes
+  const hasWrong = [...pressed].some(n => !target.includes(n));
+
+  if (hasWrong) {
+    flashKey(note, 'wrong');
+    flashLED(note, LED_COLORS.red);
+    playSFX('wrong');
+    // Clear pressed for this player
+    if (player === 1) p1Pressed.clear(); else p2Pressed.clear();
+    return;
+  }
+
+  if (allPressed) {
+    roundWon(player);
+  }
+}
+
+function handleEchoInput(player, note) {
+  if (echoPhase === 'record') {
+    // Only leader can play
+    if (player !== echoLeader) {
+      flashKey(note, 'wrong');
+      playSFX('wrong');
+      return;
+    }
+    echoInput.push(note);
+    const needed = currentChallenge.leaderSeq.length;
+    if (echoInput.length >= needed) {
+      // Store the played sequence and switch
+      currentChallenge.leaderSeq = [...echoInput];
+      // Transpose for follower
+      const leaderMin = echoLeader === 1 ? P1_MIN : P2_MIN;
+      const followerMin = echoLeader === 1 ? P2_MIN : P1_MIN;
+      const followerMax = echoLeader === 1 ? P2_MAX : P1_MAX;
+      currentChallenge.followerSeq = echoInput.map(n => {
+        const off = n - leaderMin;
+        return followerMin + Math.min(off, followerMax - followerMin);
+      });
+      echoPhase = 'echo';
+      echoInput = [];
+      const follower = echoLeader === 1 ? 2 : 1;
+      setStatus(`P${follower}: Echo the phrase!`);
+      // Set target LEDs for follower
+      if (difficulty !== 'hard') {
+        currentChallenge.followerSeq.forEach(n => {
+          setKeyTarget(n);
+          sendLED(n, LED_COLORS.cyan);
+        });
+      }
+    }
+    return;
+  }
+
+  if (echoPhase === 'echo') {
+    const follower = echoLeader === 1 ? 2 : 1;
+    if (player !== follower) {
+      flashKey(note, 'wrong');
+      playSFX('wrong');
+      return;
+    }
+    const expected = currentChallenge.followerSeq[echoInput.length];
+    echoInput.push(note);
+    if (note === expected) {
+      flashKey(note, 'correct', 200);
+    } else {
+      flashKey(note, 'wrong');
+      playSFX('wrong');
+    }
+    if (echoInput.length >= currentChallenge.followerSeq.length) {
+      // Score
+      let correct = 0;
+      for (let i = 0; i < currentChallenge.followerSeq.length; i++) {
+        if (echoInput[i] === currentChallenge.followerSeq[i]) correct++;
+      }
+      const ratio = correct / currentChallenge.followerSeq.length;
+      if (ratio >= 1) {
+        roundWon(follower);
+      } else if (ratio >= 0.5) {
+        // partial credit - half point to follower
+        addScore(follower, 0.5);
+        roundActive = false;
+        clearTimeout(roundTimer);
+        setStatus(`P${follower} partial echo! +0.5`);
+        clearKeyHighlights();
+        if (midiOut) setIdleLEDs();
+        echoLeader = echoLeader === 1 ? 2 : 1;
+        if (matchActive && !checkWin()) setTimeout(startCountdown, 2000);
+      } else {
+        // echo failed, leader gets point
+        roundWon(echoLeader);
+      }
+    }
+  }
+}
+
+function handleQuizInput(player, note) {
+  if (!quizPlayed) return;
+  const target = player === 1 ? currentChallenge.p1Notes : currentChallenge.p2Notes;
+  const pressed = player === 1 ? p1Pressed : p2Pressed;
+  const allPressed = target.every(n => pressed.has(n));
+  const hasWrong = [...pressed].some(n => !target.includes(n));
+
+  if (hasWrong) {
+    flashKey(note, 'wrong');
+    flashLED(note, LED_COLORS.red);
+    playSFX('wrong');
+    if (player === 1) p1Pressed.clear(); else p2Pressed.clear();
+    return;
+  }
+
+  if (allPressed) {
+    const elapsed = (Date.now() - roundStartTime) / 1000;
+    let bonus = elapsed < 2 ? 0.5 : 0;
+    addScore(player, bonus);
+    roundWon(player);
+  }
+}
+
+function roundWon(player) {
+  roundActive = false;
+  clearTimeout(roundTimer);
+  addScore(player, 1);
+  winnerPlayer = player;
+  winnerAnim = 60;
+  playSFX('correct');
+  playSFX('point');
+  spawnConfetti(player);
+
+  // LED effects
+  if (player === 1) {
+    cascadeLEDs(P1_MIN, P1_MAX, LED_COLORS.green);
+    for (let n = P2_MIN; n <= P2_MAX; n++) sendLED(n, 0);
+  } else {
+    cascadeLEDs(P2_MIN, P2_MAX, LED_COLORS.green);
+    for (let n = P1_MIN; n <= P1_MAX; n++) sendLED(n, 0);
+  }
+
+  // Flash correct keys
+  const targetNotes = player === 1 ? currentChallenge.p1Notes : currentChallenge.p2Notes;
+  targetNotes.forEach(n => flashKey(n, 'correct', 500));
+
+  setStatus(`P${player} scores!`);
+  clearKeyHighlights();
+
+  if (currentChallenge.type === 'echo') echoLeader = echoLeader === 1 ? 2 : 1;
+
+  if (!checkWin()) {
+    setTimeout(() => { if (midiOut) setIdleLEDs(); startCountdown(); }, 2000);
+  }
+}
+
+function addScore(player, pts) {
+  if (player === 1) p1Score += pts; else p2Score += pts;
+  updateScores();
+}
+
+function checkWin() {
+  if (p1Score >= WIN_SCORE) { matchVictory(1); return true; }
+  if (p2Score >= WIN_SCORE) { matchVictory(2); return true; }
+  return false;
+}
+
+function matchVictory(player) {
+  matchActive = false; roundActive = false;
+  matchWinner = player;
+  celebrationTimer = 300;
+  playSFX('victory');
+  stopBGM();
+  setStatus(`PLAYER ${player} WINS THE MATCH!`);
+
+  if (midiOut) {
+    if (player === 1) {
+      rainbowCascade(P1_MIN, P1_MAX);
+      for (let n = P2_MIN; n <= P2_MAX; n++) sendLED(n, 0);
+    } else {
+      rainbowCascade(P2_MIN, P2_MAX);
+      for (let n = P1_MIN; n <= P1_MAX; n++) sendLED(n, 0);
+    }
+    // Purple pulse for winner
+    setTimeout(() => {
+      const start = player === 1 ? P1_MIN : P2_MIN;
+      const end = player === 1 ? P1_MAX : P2_MAX;
+      for (let n = start; n <= end; n++) sendLED(n, LED_COLORS.purple);
+    }, 1500);
+  }
+}
+
+function updateScores() {
+  document.getElementById('p1score').textContent = p1Score % 1 === 0 ? p1Score : p1Score.toFixed(1);
+  document.getElementById('p2score').textContent = p2Score % 1 === 0 ? p2Score : p2Score.toFixed(1);
+  // Round dots
+  const p1d = document.getElementById('p1dots');
+  const p2d = document.getElementById('p2dots');
+  p1d.innerHTML = ''; p2d.innerHTML = '';
+  for (let i = 0; i < WIN_SCORE; i++) {
+    const d1 = document.createElement('div');
+    d1.className = 'round-dot' + (i < p1Score ? ' won' : '');
+    p1d.appendChild(d1);
+    const d2 = document.createElement('div');
+    d2.className = 'round-dot' + (i < p2Score ? ' won' : '');
+    p2d.appendChild(d2);
+  }
+}
+
+function setStatus(txt) { document.getElementById('statusText').textContent = txt; }
+
+// ===== PARTICLES =====
+function spawnConfetti(player) {
+  const cx = player === 1 ? 265 : 795;
+  const colors = player === 1
+    ? ['#ff4444','#ff8888','#ffaaaa','#ff6666','#ff2222']
+    : ['#4488ff','#88aaff','#aaccff','#6699ff','#2266ff'];
+  for (let i = 0; i < 40; i++) {
+    particles.push({
+      x: cx + (Math.random() - 0.5) * 100,
+      y: 200 + (Math.random() - 0.5) * 50,
+      vx: (Math.random() - 0.5) * 8,
+      vy: -Math.random() * 8 - 2,
+      life: 1, decay: 0.01 + Math.random() * 0.01,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 3 + Math.random() * 4,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.2
+    });
+  }
+}
+
+function spawnVictoryParticles(player) {
+  const cx = player === 1 ? 265 : 795;
+  const colors = ['#ff0','#0ff','#f0f','#0f0','#f90','#fff'];
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x: cx + (Math.random() - 0.5) * 300,
+      y: Math.random() * 400,
+      vx: (Math.random() - 0.5) * 3,
+      vy: -Math.random() * 2 - 1,
+      life: 1, decay: 0.005 + Math.random() * 0.005,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 2 + Math.random() * 5,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.15
+    });
+  }
+}
+
+// ===== CANVAS RENDERING =====
+function initCanvas() {
+  canvas = document.getElementById('gameCanvas');
+  ctx = canvas.getContext('2d');
+}
+
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Apply screen shake
+  if (screenShake > 0) {
+    ctx.save();
+    ctx.translate((Math.random()-0.5)*screenShake, (Math.random()-0.5)*screenShake);
+    screenShake *= 0.9;
+    if (screenShake < 0.5) screenShake = 0;
+  }
+
+  // Background - split
+  drawBackground(W, H);
+
+  // VS divider
+  drawVSDivider(W, H);
+
+  // Player areas
+  drawPlayerArea(1, W, H);
+  drawPlayerArea(2, W, H);
+
+  // Challenge display
+  if (currentChallenge && roundActive) {
+    drawChallenge(W, H);
+  }
+
+  // Timer bar
+  if (roundActive) drawTimerBar(W, H);
+
+  // Round counter
+  drawRoundCounter(W, H);
+
+  // Winner animation
+  if (winnerAnim > 0) {
+    drawWinnerFlash(W, H);
+    winnerAnim--;
+  }
+
+  // Victory celebration
+  if (matchWinner > 0) {
+    drawVictoryCelebration(W, H);
+    if (celebrationTimer > 0) {
+      celebrationTimer--;
+      if (celebrationTimer % 5 === 0) spawnVictoryParticles(matchWinner);
+    }
+  }
+
+  // Particles
+  updateAndDrawParticles();
+
+  if (screenShake > 0) ctx.restore();
+
+  // Countdown overlay
+  if (!roundActive && matchActive && !matchWinner) {
+    drawCountdown(W, H);
+  }
+
+  if (challengeAnim > 0) challengeAnim = Math.max(0, challengeAnim - 0.03);
+
+  animFrame = requestAnimationFrame(render);
+}
+
+function drawBackground(W, H) {
+  // P1 side
+  const g1 = ctx.createLinearGradient(0, 0, W/2, H);
+  g1.addColorStop(0, '#0a0008'); g1.addColorStop(1, '#0a0a1a');
+  ctx.fillStyle = g1; ctx.fillRect(0, 0, W/2, H);
+  // P2 side
+  const g2 = ctx.createLinearGradient(W/2, 0, W, H);
+  g2.addColorStop(0, '#0a0a1a'); g2.addColorStop(1, '#00081a');
+  ctx.fillStyle = g2; ctx.fillRect(W/2, 0, W/2, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+}
+
+function drawVSDivider(W, H) {
+  const cx = W / 2;
+  // Lightning effect
+  ctx.strokeStyle = `rgba(0,245,212,${0.15 + Math.sin(Date.now()/200)*0.1})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let y = 0;
+  ctx.moveTo(cx, y);
+  while (y < H) {
+    y += 15 + Math.random() * 20;
+    const xoff = (Math.random() - 0.5) * 15;
+    ctx.lineTo(cx + xoff, Math.min(y, H));
+  }
+  ctx.stroke();
+
+  // Glow line
+  ctx.strokeStyle = 'rgba(0,245,212,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
+
+  // VS circle
+  ctx.beginPath();
+  ctx.arc(cx, H/2, 28, 0, Math.PI*2);
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,245,212,0.6)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#00f5d4';
+  ctx.font = 'bold 18px "Segoe UI",sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('VS', cx, H/2);
+}
+
+function drawPlayerArea(player, W, H) {
+  const isP1 = player === 1;
+  const cx = isP1 ? W/4 : 3*W/4;
+  const color = isP1 ? '#ff4444' : '#4488ff';
+  const glowColor = isP1 ? 'rgba(255,68,68,0.15)' : 'rgba(68,136,255,0.15)';
+
+  // Glow behind score if leader
+  const isLeader = (isP1 && p1Score > p2Score) || (!isP1 && p2Score > p1Score);
+  if (isLeader && matchActive) {
+    const pulse = 0.1 + Math.sin(Date.now()/300) * 0.05;
+    ctx.beginPath();
+    ctx.arc(cx, 100, 60, 0, Math.PI*2);
+    ctx.fillStyle = isP1 ? `rgba(160,0,200,${pulse})` : `rgba(100,0,200,${pulse})`;
+    ctx.fill();
+  }
+
+  // Player label
+  ctx.font = 'bold 16px "Segoe UI",sans-serif';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText(`PLAYER ${player}`, cx, 40);
+
+  // Score
+  const score = isP1 ? p1Score : p2Score;
+  ctx.font = 'bold 64px "Segoe UI",sans-serif';
+  ctx.fillStyle = color;
+  ctx.fillText(score % 1 === 0 ? score.toString() : score.toFixed(1), cx, 120);
+
+  // Round win indicators
+  const dotY = 150;
+  for (let i = 0; i < WIN_SCORE; i++) {
+    const dx = cx + (i - WIN_SCORE/2 + 0.5) * 14;
+    ctx.beginPath();
+    ctx.arc(dx, dotY, 4, 0, Math.PI*2);
+    if (i < score) {
+      ctx.fillStyle = color;
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
+  // Player avatar area (simple icon)
+  ctx.font = '28px "Segoe UI",sans-serif';
+  ctx.fillText(isP1 ? '\u2666' : '\u2663', cx, 190);
+
+  // Note range indicator
+  ctx.font = '11px "Segoe UI",sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  const rangeText = isP1 ? 'C3 - E4' : 'F4 - B5';
+  ctx.fillText(rangeText, cx, 215);
+}
+
+function drawChallenge(W, H) {
+  const cy = 300;
+  const scale = Math.min(1, challengeAnim * 3 + 0.7);
+
+  ctx.save();
+  ctx.translate(W/2, cy);
+  ctx.scale(scale, scale);
+
+  // Challenge box
+  ctx.fillStyle = 'rgba(0,245,212,0.08)';
+  ctx.strokeStyle = 'rgba(0,245,212,0.4)';
+  ctx.lineWidth = 2;
+  roundRect(ctx, -200, -40, 400, 80, 12);
+  ctx.fill(); ctx.stroke();
+
+  // Challenge text
+  ctx.font = 'bold 24px "Segoe UI",sans-serif';
+  ctx.fillStyle = '#00f5d4';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(currentChallenge.displayText, 0, -5);
+
+  // Mode label
+  ctx.font = '12px "Segoe UI",sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  const modeLabel = gameMode === 'speed' ? 'SPEED MATCH' : gameMode === 'echo' ? 'ECHO BATTLE' : 'QUIZ DUEL';
+  ctx.fillText(modeLabel + ' - Round ' + roundNum, 0, 22);
+
+  ctx.restore();
+
+  // Show target notes on each side
+  if (currentChallenge.type !== 'echo') {
+    drawTargetNotes(1, W, H);
+    drawTargetNotes(2, W, H);
+  } else {
+    // Show echo phase info
+    ctx.font = '14px "Segoe UI",sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.textAlign = 'center';
+    if (echoPhase === 'record') {
+      const lcx = echoLeader === 1 ? W/4 : 3*W/4;
+      ctx.fillText('Play your phrase!', lcx, 370);
+      // Show how many notes recorded
+      ctx.fillText(`${echoInput.length}/${currentChallenge.leaderSeq.length} notes`, lcx, 390);
+    } else if (echoPhase === 'echo') {
+      const fcx = echoLeader === 1 ? 3*W/4 : W/4;
+      ctx.fillText('Echo it back!', fcx, 370);
+      ctx.fillText(`${echoInput.length}/${currentChallenge.followerSeq.length} notes`, fcx, 390);
+    }
+  }
+}
+
+function drawTargetNotes(player, W, H) {
+  if (!currentChallenge) return;
+  const notes = player === 1 ? currentChallenge.p1Notes : currentChallenge.p2Notes;
+  if (!notes) return;
+  const cx = player === 1 ? W/4 : 3*W/4;
+  const y = 380;
+
+  if (difficulty === 'hard' && currentChallenge.type !== 'quiz') return;
+
+  ctx.font = '14px "Segoe UI",sans-serif';
+  ctx.fillStyle = 'rgba(0,245,212,0.7)';
+  ctx.textAlign = 'center';
+  const noteStr = notes.map(n => noteName(n)).join(' + ');
+  ctx.fillText(noteStr, cx, y);
+}
+
+function drawTimerBar(W, H) {
+  const elapsed = Date.now() - roundStartTime;
+  const remaining = Math.max(0, 1 - elapsed / ROUND_TIMEOUT);
+  const barW = W - 40;
+  const barH = 4;
+  const y = H - 15;
+
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(20, y, barW, barH);
+
+  const color = remaining > 0.3 ? '#00f5d4' : remaining > 0.15 ? '#ffaa00' : '#ff4444';
+  ctx.fillStyle = color;
+  ctx.fillRect(20, y, barW * remaining, barH);
+}
+
+function drawRoundCounter(W, H) {
+  ctx.font = '11px "Segoe UI",sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.textAlign = 'center';
+  ctx.fillText(`Round ${roundNum}`, W/2, H - 8);
+}
+
+function drawCountdown(W, H) {
+  const txt = document.getElementById('statusText').textContent;
+  if (txt >= '1' && txt <= '3') {
+    ctx.font = 'bold 120px "Segoe UI",sans-serif';
+    ctx.fillStyle = `rgba(0,245,212,${0.6 + Math.sin(Date.now()/100)*0.3})`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, W/2, H/2 - 30);
+  }
+}
+
+function drawWinnerFlash(W, H) {
+  const alpha = winnerAnim / 60 * 0.3;
+  const cx = winnerPlayer === 1 ? W/4 : 3*W/4;
+  const gradient = ctx.createRadialGradient(cx, H/2, 0, cx, H/2, 300);
+  const color = winnerPlayer === 1 ? `rgba(255,68,68,${alpha})` : `rgba(68,136,255,${alpha})`;
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, 'transparent');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, W, H);
+
+  if (winnerAnim > 40) screenShake = 5;
+}
+
+function drawVictoryCelebration(W, H) {
+  const p = matchWinner;
+  const cx = p === 1 ? W/4 : 3*W/4;
+
+  // Big glow
+  const pulse = 0.3 + Math.sin(Date.now()/200) * 0.15;
+  const gradient = ctx.createRadialGradient(cx, H/2, 0, cx, H/2, 250);
+  const color = p === 1 ? `rgba(255,68,68,${pulse})` : `rgba(68,136,255,${pulse})`;
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, 'transparent');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, W, H);
+
+  // Winner text
+  ctx.font = 'bold 42px "Segoe UI",sans-serif';
+  ctx.fillStyle = p === 1 ? '#ff4444' : '#4488ff';
+  ctx.textAlign = 'center';
+  ctx.fillText(`PLAYER ${p}`, cx, H/2 - 30);
+  ctx.font = 'bold 28px "Segoe UI",sans-serif';
+  ctx.fillStyle = '#ffd700';
+  ctx.fillText('VICTORY!', cx, H/2 + 10);
+
+  // Trophy
+  ctx.font = '48px "Segoe UI",sans-serif';
+  ctx.fillText('\u2605', cx, H/2 + 65);
+
+  // Loser side dims
+  const loserX = p === 1 ? W/2 : 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(loserX, 0, W/2, H);
+}
+
+function updateAndDrawParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15; // gravity
+    p.life -= p.decay;
+    p.rotation += p.rotSpeed;
+
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); startMatch(); }
+  if (e.code === 'KeyR') { resetMatch(); }
+  if (e.code === 'Escape') { resetMatch(); }
+});
+
+// ===== INIT =====
+function init() {
+  buildKeyboard();
+  initCanvas();
+  updateScores();
+  render();
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

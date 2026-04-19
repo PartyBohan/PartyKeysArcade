@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groove Kingdom - MIDI Kingdom Builder</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg1: #0a0a1a; --bg2: #0d1b2a;
+            --accent: #00f5d4; --danger: #ff6b6b;
+            --text: #e0e0e0; --card-bg: rgba(255,255,255,0.05);
+            --bass-color: #ff4444; --chord-color: #4488ff; --melody-color: #44ff88;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg1), var(--bg2));
+            min-height: 100vh; color: var(--text); overflow-x: hidden;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 10px 15px; }
+        .header {
+            text-align: center; margin-bottom: 8px; display: flex;
+            align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+        }
+        .header h1 {
+            font-size: 1.6em;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .top-bar { display: flex; align-items: center; gap: 10px; }
+        .midi-bar {
+            background: var(--card-bg); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+            padding: 8px 15px; margin-bottom: 8px; display: flex;
+            align-items: center; gap: 12px; font-size: 0.85em; flex-wrap: wrap;
+        }
+        .midi-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--danger); transition: background 0.3s;
+        }
+        .midi-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .midi-bar select, .midi-bar button {
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text); padding: 4px 10px; border-radius: 6px; font-size: 0.85em; cursor: pointer;
+        }
+        .midi-bar select:hover, .midi-bar button:hover { background: rgba(255,255,255,0.15); }
+        .stats-bar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .stat-card {
+            background: var(--card-bg); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+            padding: 8px 14px; flex: 1; min-width: 90px; text-align: center;
+        }
+        .stat-card .label { font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px; opacity: 0.6; }
+        .stat-card .value { font-size: 1.2em; font-weight: bold; color: var(--accent); }
+        .controls-bar {
+            display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap;
+        }
+        .ctrl-btn {
+            background: var(--card-bg); border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text); padding: 8px 18px; border-radius: 8px;
+            cursor: pointer; font-size: 0.9em; transition: all 0.2s;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.12); }
+        .ctrl-btn.active { border-color: var(--accent); color: var(--accent); }
+        .ctrl-btn.primary {
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            color: #000; font-weight: bold; border: none;
+        }
+        .ctrl-btn.primary:hover { opacity: 0.85; }
+        .diff-selector { display: flex; gap: 4px; }
+        .diff-btn {
+            background: var(--card-bg); border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text); padding: 5px 12px; border-radius: 6px;
+            cursor: pointer; font-size: 0.8em; transition: all 0.2s;
+        }
+        .diff-btn:hover { background: rgba(255,255,255,0.1); }
+        .diff-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,245,212,0.1); }
+        .canvas-wrap {
+            background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 6px; margin-bottom: 8px; text-align: center;
+        }
+        canvas.game-canvas { display: block; margin: 0 auto; border-radius: 8px; max-width: 100%; }
+        .keyboard-container {
+            background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 10px; position: relative; overflow-x: auto;
+        }
+        .keyboard {
+            display: flex; position: relative; height: 100px; min-width: 700px;
+            margin: 0 auto; justify-content: center;
+        }
+        .white-key {
+            width: 28px; height: 95px;
+            background: linear-gradient(180deg, #e8e8e8, #fff);
+            border: 1px solid #999; border-radius: 0 0 4px 4px;
+            cursor: pointer; position: relative; z-index: 1; transition: background 0.1s;
+        }
+        .white-key:hover { background: linear-gradient(180deg, #d0d0d0, #eee); }
+        .white-key.pressed { background: linear-gradient(180deg, #aaa, #ccc); }
+        .white-key.led-on { box-shadow: inset 0 -30px 20px -10px var(--led-color, red); }
+        .black-key {
+            width: 18px; height: 60px;
+            background: linear-gradient(180deg, #333, #111);
+            border: 1px solid #000; border-radius: 0 0 3px 3px;
+            position: absolute; z-index: 2; cursor: pointer; transition: background 0.1s;
+        }
+        .black-key:hover { background: linear-gradient(180deg, #444, #222); }
+        .black-key.pressed { background: linear-gradient(180deg, #555, #333); }
+        .black-key.led-on { box-shadow: inset 0 -20px 15px -5px var(--led-color, red); }
+        .key-label {
+            position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+            font-size: 7px; color: #666; pointer-events: none;
+        }
+        .black-key .key-label { color: #888; bottom: 2px; font-size: 6px; }
+        .audio-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+        .vol-slider { width: 60px; accent-color: var(--accent); }
+        .shortcuts-hint { text-align: center; font-size: 0.7em; opacity: 0.4; margin-top: 6px; }
+        .layer-indicator { display: flex; gap: 6px; margin-bottom: 8px; }
+        .layer-card {
+            flex: 1; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; padding: 6px 10px; text-align: center; transition: all 0.3s;
+        }
+        .layer-card.active-layer { border-color: var(--accent); box-shadow: 0 0 12px rgba(0,245,212,0.2); }
+        .layer-card.locked { opacity: 0.7; }
+        .layer-card .layer-name { font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        .layer-card .layer-status { font-size: 0.65em; opacity: 0.6; margin-top: 2px; }
+        .layer-card .layer-progress { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+        .layer-card .layer-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+        .layer-bass .layer-name { color: var(--bass-color); }
+        .layer-bass .layer-progress-fill { background: var(--bass-color); }
+        .layer-chord .layer-name { color: var(--chord-color); }
+        .layer-chord .layer-progress-fill { background: var(--chord-color); }
+        .layer-melody .layer-name { color: var(--melody-color); }
+        .layer-melody .layer-progress-fill { background: var(--melody-color); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Groove Kingdom</h1>
+        <div class="top-bar">
+            <div class="diff-selector">
+                <button class="diff-btn active" data-diff="easy">Easy</button>
+                <button class="diff-btn" data-diff="medium">Medium</button>
+                <button class="diff-btn" data-diff="hard">Hard</button>
+            </div>
+        </div>
+    </div>
+    <div class="midi-bar">
+        <div class="midi-dot" id="midiDot"></div>
+        <span id="midiStatus">MIDI: Not Connected</span>
+        <select id="midiInSelect"><option>-- Input --</option></select>
+        <select id="midiOutSelect"><option>-- Output --</option></select>
+        <button onclick="refreshMIDI()">Refresh</button>
+        <div class="audio-controls">
+            <label style="font-size:0.8em;">Vol</label>
+            <input type="range" class="vol-slider" id="masterVol" min="0" max="100" value="70">
+            <button class="ctrl-btn" id="muteBtn" onclick="toggleMute()" style="padding:4px 10px;font-size:0.8em;">Mute</button>
+        </div>
+    </div>
+    <div class="layer-indicator">
+        <div class="layer-card layer-bass" id="layerBass">
+            <div class="layer-name">Bass</div>
+            <div class="layer-status" id="bassStatus">Waiting</div>
+            <div class="layer-progress"><div class="layer-progress-fill" id="bassProgress" style="width:0%"></div></div>
+        </div>
+        <div class="layer-card layer-chord" id="layerChord">
+            <div class="layer-name">Chords</div>
+            <div class="layer-status" id="chordStatus">Locked</div>
+            <div class="layer-progress"><div class="layer-progress-fill" id="chordProgress" style="width:0%"></div></div>
+        </div>
+        <div class="layer-card layer-melody" id="layerMelody">
+            <div class="layer-name">Melody</div>
+            <div class="layer-status" id="melodyStatus">Locked</div>
+            <div class="layer-progress"><div class="layer-progress-fill" id="melodyProgress" style="width:0%"></div></div>
+        </div>
+    </div>
+    <div class="stats-bar">
+        <div class="stat-card"><div class="label">Villagers</div><div class="value" id="villagerCount">0 / 20</div></div>
+        <div class="stat-card"><div class="label">Kingdom</div><div class="value" id="kingdomProgress">0%</div></div>
+        <div class="stat-card"><div class="label">Layer</div><div class="value" id="currentLayer">Bass</div></div>
+        <div class="stat-card"><div class="label">Accuracy</div><div class="value" id="accuracy">--</div></div>
+        <div class="stat-card"><div class="label">Score</div><div class="value" id="score">0</div></div>
+    </div>
+    <div class="controls-bar">
+        <button class="ctrl-btn primary" id="startBtn" onclick="startGame()">Start</button>
+        <button class="ctrl-btn" onclick="restartGame()">Restart (R)</button>
+        <button class="ctrl-btn" id="pauseBtn" onclick="togglePause()">Pause (Space)</button>
+    </div>
+    <div class="canvas-wrap">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="500"></canvas>
+    </div>
+    <div class="keyboard-container">
+        <div class="keyboard" id="keyboard"></div>
+    </div>
+    <div class="shortcuts-hint">Space = Pause &nbsp; R = Restart &nbsp; Esc = Quit</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  GROOVE KINGDOM — Build your kingdom one loop at a time
+// ═══════════════════════════════════════════════════════════════
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const MIDI_LO = 48, MIDI_HI = 83;
+const LED = { OFF:0, RED:10, GREEN:30, BLUE:50, YELLOW:70, CYAN:90, PURPLE:110, WHITE:125 };
+const WIN_COUNT = 20;
+
+const DIFF = {
+    easy:   { tempo:100, window:150, label:'Easy'   },
+    medium: { tempo:110, window:120, label:'Medium'  },
+    hard:   { tempo:120, window:80,  label:'Hard'    }
+};
+
+const THEMES = ['Medieval Castle','Japanese Temple','Space Station','Underwater Palace'];
+
+// Chord definitions — notes within MIDI range
+function chordNotes(name) {
+    const map = {
+        'C':  [48,52,55], 'G':  [55,59,62], 'Am': [57,60,64], 'F':  [53,57,60],
+        'C5': [60,64,67], 'G5': [67,71,74], 'Am5':[69,72,76], 'F5': [65,69,72],
+    };
+    return map[name] || [48,52,55];
+}
+function chordRoot(name) {
+    return { C:48, G:55, Am:57, F:53 }[name] || 48;
+}
+
+const PROGS = [['C','G','Am','F'],['Am','F','C','G'],['C','F','G','Am'],['F','C','G','Am']];
+
+// ═══ STATE ═══
+let audioCtx, masterGain, bgmGain, sfxGain, keysGain;
+let midiIn = null, midiOut = null, midiAccess = null;
+let diff = 'easy';
+let state = 'idle'; // idle | countdown | playing | paused | complete
+let layer = 0;      // 0=bass 1=chord 2=melody
+let locked = [false,false,false];
+let lockedPat = [null,null,null];
+let villagers = 0, score = 0, themeIdx = 0, completions = 0;
+
+// Timing
+let loopStart = 0;       // performance.now() of loop start
+let pattern = [];         // [{notes:[], startBeat:N, durBeats:N}, ...]
+let totalBeats = 16;      // 4 bars × 4 beats
+let hits = [], beatChecked = [];
+let curAcc = 0;
+let pausedElapsed = 0;
+
+// Notes currently pressed by player
+let pressed = new Set();
+let activeOsc = {};
+
+// Visuals
+let particles = [];
+let vills = [];    // villager sprites
+let blds = [];     // buildings
+let treez = [];    // trees
+let frame = 0;
+let flashMsg = '', flashClr = '#fff', flashT = 0;
+
+// LED state for virtual keyboard
+let keyLED = {};
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ═══════════════════════════════════════════════════════════════
+//  AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.7;
+    masterGain.connect(audioCtx.destination);
+    bgmGain = audioCtx.createGain(); bgmGain.gain.value = 0.4; bgmGain.connect(masterGain);
+    sfxGain = audioCtx.createGain(); sfxGain.gain.value = 0.6; sfxGain.connect(masterGain);
+    keysGain = audioCtx.createGain(); keysGain.gain.value = 0.5; keysGain.connect(masterGain);
+}
+
+let muted = false;
+function midiToFreq(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+
+// Rich piano tone: 5-partial additive synthesis + filter + ADSR
+function synthNote(note, dest, dur = 0.5, vel = 0.5) {
+    if (!audioCtx || muted) return null;
+    const freq = midiToFreq(note);
+    const t = audioCtx.currentTime;
+    const partials = [1, 2, 3, 4, 5];
+    const amps    = [1, 0.45, 0.2, 0.1, 0.05];
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = note < 60 ? 500 : note > 72 ? 6000 : 3000;
+    filter.Q.value = 0.8;
+    const env = audioCtx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(vel * 0.12, t + 0.008);
+    env.gain.linearRampToValueAtTime(vel * 0.07, t + 0.06);
+    env.gain.setValueAtTime(vel * 0.07, t + Math.max(0.06, dur - 0.15));
+    env.gain.linearRampToValueAtTime(0, t + dur);
+    const oscs = [];
+    for (let i = 0; i < partials.length; i++) {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq * partials[i];
+        // Slight detune for richness
+        o.detune.value = (i - 2) * 3;
+        g.gain.value = amps[i];
+        o.connect(g); g.connect(filter);
+        o.start(t); o.stop(t + dur + 0.02);
+        oscs.push(o);
+    }
+    filter.connect(env); env.connect(dest);
+    return {
+        stop() {
+            const now = audioCtx.currentTime;
+            env.gain.cancelScheduledValues(now);
+            env.gain.setValueAtTime(env.gain.value, now);
+            env.gain.linearRampToValueAtTime(0, now + 0.04);
+            oscs.forEach(o => { try { o.stop(now + 0.05); } catch(e){} });
+        }
+    };
+}
+
+function playKeyDown(note) {
+    if (activeOsc[note]) { activeOsc[note].stop(); delete activeOsc[note]; }
+    activeOsc[note] = synthNote(note, keysGain, 3.0, 0.45);
+}
+function playKeyUp(note) {
+    if (activeOsc[note]) { activeOsc[note].stop(); delete activeOsc[note]; }
+}
+
+function clickMetronome(accent) {
+    if (!audioCtx || muted) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = accent ? 1200 : 900;
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(accent ? 0.12 : 0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t + 0.07);
+}
+
+function sfxSuccess() {
+    if (!audioCtx||muted) return;
+    [0,4,7,12].forEach((s,i) => setTimeout(() => synthNote(60+s, sfxGain, 0.3, 0.25), i*80));
+}
+function sfxFail() {
+    if (!audioCtx||muted) return;
+    [0,-1,-3].forEach((s,i) => setTimeout(() => synthNote(55+s, sfxGain, 0.2, 0.2), i*90));
+}
+
+// Backing track: schedule locked layer playback using Web Audio timing
+let backingNodes = [];
+function scheduleBackingTrack() {
+    stopBacking();
+    if (!audioCtx) return;
+    const bpm = DIFF[diff].tempo;
+    const beatSec = 60 / bpm;
+    const now = audioCtx.currentTime;
+    for (let li = 0; li < 3; li++) {
+        if (!locked[li] || !lockedPat[li]) continue;
+        lockedPat[li].forEach(ev => {
+            const startT = now + ev.startBeat * beatSec;
+            ev.notes.forEach(n => {
+                const dur = ev.durBeats * beatSec;
+                const s = synthNote(n, bgmGain, dur, 0.2);
+                // We don't need to track these carefully since they self-stop
+            });
+        });
+    }
+}
+function stopBacking() {
+    backingNodes.forEach(n => { try { n.stop(); } catch(e){} });
+    backingNodes = [];
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MIDI
+// ═══════════════════════════════════════════════════════════════
+async function initMIDI() {
+    try {
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        populateMIDI();
+        midiAccess.onstatechange = populateMIDI;
+    } catch(e) {
+        document.getElementById('midiStatus').textContent = 'MIDI: Unavailable';
+    }
+}
+
+function populateMIDI() {
+    const si = document.getElementById('midiInSelect');
+    const so = document.getElementById('midiOutSelect');
+    si.innerHTML = '<option value="">-- Input --</option>';
+    so.innerHTML = '<option value="">-- Output --</option>';
+    for (const [id, inp] of midiAccess.inputs) {
+        si.innerHTML += `<option value="${id}">${inp.name}</option>`;
+    }
+    for (const [id, out] of midiAccess.outputs) {
+        so.innerHTML += `<option value="${id}">${out.name}</option>`;
+    }
+    // Auto-select first
+    if (midiAccess.inputs.size > 0) {
+        const id = midiAccess.inputs.keys().next().value;
+        si.value = id; pickInput(id);
+    }
+    if (midiAccess.outputs.size > 0) {
+        const id = midiAccess.outputs.keys().next().value;
+        so.value = id; pickOutput(id);
+    }
+}
+
+function pickInput(id) {
+    if (midiIn) midiIn.onmidimessage = null;
+    midiIn = id ? midiAccess.inputs.get(id) : null;
+    if (midiIn) {
+        midiIn.onmidimessage = onMIDI;
+        document.getElementById('midiDot').classList.add('connected');
+        document.getElementById('midiStatus').textContent = 'MIDI: ' + midiIn.name;
+    } else {
+        document.getElementById('midiDot').classList.remove('connected');
+        document.getElementById('midiStatus').textContent = 'MIDI: Not Connected';
+    }
+}
+
+function pickOutput(id) { midiOut = id ? midiAccess.outputs.get(id) : null; }
+
+document.getElementById('midiInSelect').onchange = e => pickInput(e.target.value);
+document.getElementById('midiOutSelect').onchange = e => pickOutput(e.target.value);
+function refreshMIDI() { initMIDI(); }
+
+function onMIDI(msg) {
+    const [st, note, vel] = msg.data;
+    const cmd = st & 0xF0;
+    if (cmd === 0x90 && vel > 0) noteOn(note);
+    else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) noteOff(note);
+}
+
+// LED
+function ledSet(n, c) {
+    if (!midiOut || n < MIDI_LO || n > MIDI_HI) return;
+    midiOut.send(c ? [0x90, n, c] : [0x80, n, 0]);
+}
+function ledClear() { if (!midiOut) return; for (let n=MIDI_LO; n<=MIDI_HI; n++) midiOut.send([0x80,n,0]); }
+function ledNotes(notes, c) { notes.forEach(n => { if(n>=MIDI_LO&&n<=MIDI_HI) ledSet(n,c); }); }
+
+function ledRainbow() {
+    const cs = [LED.RED,LED.YELLOW,LED.GREEN,LED.CYAN,LED.BLUE,LED.PURPLE];
+    for (let n=MIDI_LO; n<=MIDI_HI; n++) {
+        const d = (n-MIDI_LO)*20;
+        setTimeout(() => ledSet(n, cs[(n-MIDI_LO)%cs.length]), d);
+        setTimeout(() => ledSet(n, LED.OFF), d+300);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VIRTUAL KEYBOARD
+// ═══════════════════════════════════════════════════════════════
+function buildKeyboard() {
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+    let whiteIdx = 0;
+    const whiteW = 28;
+    // First pass: whites
+    for (let n = MIDI_LO; n <= MIDI_HI; n++) {
+        const nm = NOTE_NAMES[n%12];
+        if (nm.includes('#')) continue;
+        const key = document.createElement('div');
+        key.className = 'white-key';
+        key.dataset.note = n;
+        const lbl = document.createElement('span');
+        lbl.className = 'key-label';
+        lbl.textContent = nm + (Math.floor(n/12)-1);
+        key.appendChild(lbl);
+        key.onmousedown = () => noteOn(n);
+        key.onmouseup = () => noteOff(n);
+        key.onmouseleave = () => { if (pressed.has(n)) noteOff(n); };
+        kb.appendChild(key);
+    }
+    // Second pass: blacks
+    whiteIdx = 0;
+    for (let n = MIDI_LO; n <= MIDI_HI; n++) {
+        const nm = NOTE_NAMES[n%12];
+        if (!nm.includes('#')) { whiteIdx++; continue; }
+        const key = document.createElement('div');
+        key.className = 'black-key';
+        key.dataset.note = n;
+        key.style.left = (whiteIdx * whiteW - 9) + 'px';
+        key.onmousedown = () => noteOn(n);
+        key.onmouseup = () => noteOff(n);
+        key.onmouseleave = () => { if (pressed.has(n)) noteOff(n); };
+        kb.appendChild(key);
+    }
+}
+
+function updateKBVisual() {
+    document.querySelectorAll('.white-key,.black-key').forEach(k => {
+        const n = +k.dataset.note;
+        k.classList.toggle('pressed', pressed.has(n));
+        const led = keyLED[n];
+        if (led) {
+            k.classList.add('led-on');
+            k.style.setProperty('--led-color', led);
+        } else {
+            k.classList.remove('led-on');
+            k.style.removeProperty('--led-color');
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  NOTE INPUT & HIT DETECTION
+// ═══════════════════════════════════════════════════════════════
+function noteOn(note) {
+    initAudio();
+    pressed.add(note);
+    playKeyDown(note);
+    checkHit();
+    updateKBVisual();
+}
+function noteOff(note) {
+    pressed.delete(note);
+    playKeyUp(note);
+    updateKBVisual();
+}
+
+function checkHit() {
+    if (state !== 'playing' || pattern.length === 0) return;
+    const bpm = DIFF[diff].tempo;
+    const beatMs = 60000 / bpm;
+    const windowMs = DIFF[diff].window;
+    const elapsed = performance.now() - loopStart;
+
+    // Check each event that hasn't been hit yet, within window
+    for (let i = 0; i < pattern.length; i++) {
+        if (hits[i]) continue;
+        const ev = pattern[i];
+        const evTimeMs = ev.startBeat * beatMs;
+        const delta = Math.abs(elapsed - evTimeMs);
+
+        if (delta > windowMs) continue; // Out of window
+
+        // Check note match
+        if (layer === 1) {
+            // Chord: all notes must be pressed
+            if (ev.notes.every(n => pressed.has(n))) {
+                hits[i] = true;
+                onHit(ev, true);
+            }
+        } else {
+            // Bass/Melody: any target note
+            if (ev.notes.some(n => pressed.has(n))) {
+                hits[i] = true;
+                onHit(ev, true);
+            }
+        }
+    }
+}
+
+function onHit(ev, good) {
+    if (good) {
+        // Sparkle
+        for (let i = 0; i < 8; i++) {
+            particles.push({
+                x: 530 + (Math.random()-0.5)*80, y: 360 + (Math.random()-0.5)*20,
+                vx: (Math.random()-0.5)*4, vy: -Math.random()*3-1,
+                life: 1, color: ['#00f5d4','#fff','#ffd700'][~~(Math.random()*3)],
+                size: Math.random()*3+1
+            });
+        }
+        // Flash LED white briefly
+        ledNotes(ev.notes, LED.WHITE);
+        setTimeout(() => updateTargetLED(), 150);
+    }
+}
+
+function updateTargetLED() {
+    ledClear();
+    if (state !== 'playing' || pattern.length === 0) return;
+    const bpm = DIFF[diff].tempo;
+    const beatMs = 60000 / bpm;
+    const elapsed = performance.now() - loopStart;
+
+    // Light up the current (nearest upcoming unhit) event
+    const ledC = [LED.RED, LED.BLUE, LED.GREEN][layer];
+    for (let i = 0; i < pattern.length; i++) {
+        if (hits[i]) continue;
+        const evT = pattern[i].startBeat * beatMs;
+        if (evT >= elapsed - DIFF[diff].window) {
+            ledNotes(pattern[i].notes, ledC);
+            break;
+        }
+    }
+
+    // Pulse locked layer notes gently
+    for (let li = 0; li < 3; li++) {
+        if (!locked[li] || !lockedPat[li]) continue;
+        const pulse = Math.sin(Date.now()/400) > 0.3;
+        if (pulse) {
+            const c = [LED.RED, LED.BLUE, LED.GREEN][li];
+            // Just a few notes to avoid overwhelming
+            const firstEv = lockedPat[li][0];
+            if (firstEv) ledNotes(firstEv.notes.slice(0,2), c);
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PATTERN GENERATION
+// ═══════════════════════════════════════════════════════════════
+function genBassPattern() {
+    const prog = PROGS[~~(Math.random()*PROGS.length)];
+    const pat = [];
+    prog.forEach((ch, bar) => {
+        let root = chordRoot(ch);
+        // Keep in range
+        while (root > 59) root -= 12;
+        while (root < MIDI_LO) root += 12;
+
+        if (diff === 'easy') {
+            for (let b = 0; b < 4; b++)
+                pat.push({ notes:[root], startBeat: bar*4+b, durBeats:1 });
+        } else if (diff === 'medium') {
+            pat.push({ notes:[root], startBeat:bar*4, durBeats:1 });
+            pat.push({ notes:[root], startBeat:bar*4+1, durBeats:0.5 });
+            const fifth = Math.min(MIDI_HI, root+7);
+            pat.push({ notes:[fifth], startBeat:bar*4+1.5, durBeats:0.5 });
+            pat.push({ notes:[root], startBeat:bar*4+2, durBeats:1 });
+            pat.push({ notes:[root], startBeat:bar*4+3, durBeats:1 });
+        } else {
+            for (let b = 0; b < 8; b++) {
+                const n = b%2===0 ? root : Math.min(MIDI_HI, root + (b%3===0?7:5));
+                pat.push({ notes:[n], startBeat:bar*4+b*0.5, durBeats:0.5 });
+            }
+        }
+    });
+    return pat;
+}
+
+function genChordPattern() {
+    const prog = PROGS[~~(Math.random()*PROGS.length)];
+    const pat = [];
+    prog.forEach((ch, bar) => {
+        const notes = chordNotes(ch);
+        if (diff === 'easy') {
+            pat.push({ notes, startBeat:bar*4, durBeats:4, chord:ch });
+        } else if (diff === 'medium') {
+            pat.push({ notes, startBeat:bar*4, durBeats:2, chord:ch });
+            pat.push({ notes, startBeat:bar*4+2, durBeats:2, chord:ch });
+        } else {
+            for (let b=0;b<4;b++)
+                pat.push({ notes, startBeat:bar*4+b, durBeats:1, chord:ch });
+        }
+    });
+    return pat;
+}
+
+function genMelodyPattern() {
+    const scale = [0,2,4,5,7,9,11];
+    const prog = PROGS[~~(Math.random()*PROGS.length)];
+    const pat = [];
+    prog.forEach((ch, bar) => {
+        const ct = chordNotes(ch).map(n => n%12);
+        const count = diff==='easy' ? 4 : 8;
+        const dur = diff==='easy' ? 1 : 0.5;
+        for (let i=0; i<count; i++) {
+            let pc;
+            if (i%2===0) {
+                pc = ct[i%ct.length];
+            } else {
+                pc = scale[~~(Math.random()*scale.length)];
+            }
+            let note = 72 + pc - (72%12); // octave 5 base
+            while (note > MIDI_HI) note -= 12;
+            while (note < MIDI_LO) note += 12;
+            pat.push({ notes:[note], startBeat: bar*4 + i*dur, durBeats:dur });
+        }
+    });
+    return pat;
+}
+
+function genPattern() {
+    if (layer===0) return genBassPattern();
+    if (layer===1) return genChordPattern();
+    return genMelodyPattern();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME CONTROL
+// ═══════════════════════════════════════════════════════════════
+let lastBeatTick = -1;
+let countdownLeft = 0;
+let countdownStart = 0;
+
+function startGame() {
+    initAudio();
+    if (state === 'playing') return;
+    if (state === 'complete') {
+        // New kingdom
+        villagers = 0; vills = []; blds = []; treez = [];
+        locked = [false,false,false]; lockedPat = [null,null,null];
+        layer = 0;
+    }
+
+    state = 'countdown';
+    countdownLeft = 4;
+    countdownStart = performance.now();
+    document.getElementById('startBtn').textContent = 'Get Ready...';
+    document.getElementById('startBtn').disabled = true;
+}
+
+function beginPlaying() {
+    state = 'playing';
+    layer = locked[0] ? (locked[1] ? 2 : 1) : 0;
+    pattern = genPattern();
+    hits = new Array(pattern.length).fill(false);
+    curAcc = 0;
+    lastBeatTick = -1;
+    loopStart = performance.now();
+
+    updateLayerUI();
+    updateTargetLED();
+    scheduleBackingTrack();
+
+    document.getElementById('startBtn').textContent = 'Playing...';
+}
+
+function togglePause() {
+    if (state === 'playing') {
+        state = 'paused';
+        pausedElapsed = performance.now() - loopStart;
+        document.getElementById('pauseBtn').textContent = 'Resume (Space)';
+        stopBacking();
+    } else if (state === 'paused') {
+        state = 'playing';
+        loopStart = performance.now() - pausedElapsed;
+        document.getElementById('pauseBtn').textContent = 'Pause (Space)';
+        scheduleBackingTrack();
+    }
+}
+
+function restartGame() {
+    state = 'idle'; stopBacking(); ledClear();
+    locked = [false,false,false]; lockedPat = [null,null,null];
+    layer = 0; villagers = 0; score = 0; pattern = [];
+    curAcc = 0; vills = []; blds = []; treez = []; particles = [];
+    flashMsg = '';
+    updateStats(); updateLayerUI();
+    document.getElementById('startBtn').textContent = 'Start';
+    document.getElementById('startBtn').disabled = false;
+}
+
+function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'Unmute' : 'Mute';
+    if (masterGain) masterGain.gain.value = muted ? 0 : document.getElementById('masterVol').value/100;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GAME UPDATE (called each frame)
+// ═══════════════════════════════════════════════════════════════
+function updateGame() {
+    if (state === 'countdown') {
+        const elapsed = performance.now() - countdownStart;
+        const beatsElapsed = Math.floor(elapsed / (60000 / DIFF[diff].tempo));
+        if (beatsElapsed > countdownLeft) {
+            countdownLeft--;
+        }
+        // Metronome clicks for countdown
+        if (beatsElapsed !== lastBeatTick) {
+            lastBeatTick = beatsElapsed;
+            clickMetronome(beatsElapsed === 0);
+        }
+        if (countdownLeft <= 0) {
+            beginPlaying();
+        }
+        return;
+    }
+
+    if (state !== 'playing') return;
+
+    const bpm = DIFF[diff].tempo;
+    const beatMs = 60000 / bpm;
+    const elapsed = performance.now() - loopStart;
+    const currentBeat = elapsed / beatMs;
+    const beatInt = Math.floor(currentBeat);
+
+    // Metronome
+    if (beatInt !== lastBeatTick && beatInt < totalBeats) {
+        lastBeatTick = beatInt;
+        clickMetronome(beatInt % 4 === 0);
+    }
+
+    // Check for missed events (past window, not hit)
+    for (let i = 0; i < pattern.length; i++) {
+        if (hits[i] || beatChecked[i]) continue;
+        const evEnd = pattern[i].startBeat * beatMs + DIFF[diff].window;
+        if (elapsed > evEnd) {
+            beatChecked[i] = true;
+            // Miss — flash yellow LED
+            ledNotes(pattern[i].notes, LED.YELLOW);
+            setTimeout(() => updateTargetLED(), 120);
+        }
+    }
+
+    // Update accuracy
+    const evaluated = hits.filter((h,i) => h || beatChecked[i]).length;
+    const hitCount = hits.filter(Boolean).length;
+    curAcc = evaluated > 0 ? Math.round(hitCount / evaluated * 100) : 0;
+
+    // Update LED visuals for keyboard
+    keyLED = {};
+    const layerCssColors = ['#ff4444','#4488ff','#44ff88'];
+    // Show current target event
+    for (let i = 0; i < pattern.length; i++) {
+        if (hits[i]) continue;
+        const evT = pattern[i].startBeat * beatMs;
+        if (evT >= elapsed - DIFF[diff].window && evT <= elapsed + beatMs * 4) {
+            const alpha = evT <= elapsed + beatMs ? 1 : 0.4;
+            pattern[i].notes.forEach(n => {
+                if (n >= MIDI_LO && n <= MIDI_HI) keyLED[n] = layerCssColors[layer];
+            });
+            if (evT <= elapsed + DIFF[diff].window) break; // Just show the current one prominently
+        }
+    }
+    // Locked layer pulses
+    const pulse = Math.sin(Date.now()/500) > 0;
+    for (let li = 0; li < 3; li++) {
+        if (!locked[li] || !lockedPat[li] || !pulse) continue;
+        const c = layerCssColors[li];
+        const pEv = lockedPat[li][0];
+        if (pEv) pEv.notes.forEach(n => { if (n>=MIDI_LO && n<=MIDI_HI && !keyLED[n]) keyLED[n]=c+'88'; });
+    }
+    updateKBVisual();
+
+    // Loop end check
+    if (elapsed >= totalBeats * beatMs) {
+        finishLoop();
+    }
+}
+
+function finishLoop() {
+    const hitCount = hits.filter(Boolean).length;
+    const total = pattern.length;
+    const acc = total > 0 ? Math.round(hitCount / total * 100) : 0;
+    curAcc = acc;
+
+    if (acc >= 80) {
+        // Lock layer!
+        locked[layer] = true;
+        lockedPat[layer] = pattern.map(e => ({...e}));
+
+        let pts = Math.round(acc * 100);
+        if (acc === 100) pts *= 2;
+        score += pts;
+
+        villagers++;
+        score += 50;
+        spawnVillager();
+
+        flashMsg = 'Layer Locked! +1 Villager!';
+        flashClr = '#00f5d4'; flashT = 2.5;
+        sfxSuccess();
+        ledRainbow();
+
+        if (villagers >= WIN_COUNT) { completeKingdom(); return; }
+
+        // Advance layer
+        if (layer < 2 && !locked[layer+1]) {
+            layer++;
+        } else {
+            // Cycle: unlock all, back to bass
+            locked = [false,false,false];
+            lockedPat = [null,null,null];
+            layer = 0;
+        }
+    } else if (acc < 50) {
+        // Evict
+        if (villagers > 0) {
+            villagers--;
+            evictVillager();
+            flashMsg = 'Villager Evicted!'; flashClr = '#ff6b6b'; flashT = 2;
+            sfxFail();
+            for (let n=MIDI_LO;n<=MIDI_HI;n++) ledSet(n, LED.RED);
+            setTimeout(ledClear, 400);
+        } else {
+            flashMsg = 'Try Again! ' + acc + '%'; flashClr = '#ffd700'; flashT = 1.5;
+        }
+    } else {
+        flashMsg = acc + '% — Need 80% to lock!'; flashClr = '#ffd700'; flashT = 1.5;
+    }
+
+    // Reset for next loop
+    pattern = genPattern();
+    hits = new Array(pattern.length).fill(false);
+    beatChecked = new Array(pattern.length).fill(false);
+    lastBeatTick = -1;
+    loopStart = performance.now();
+    updateLayerUI();
+    updateTargetLED();
+    stopBacking();
+    scheduleBackingTrack();
+}
+
+function completeKingdom() {
+    state = 'complete';
+    completions++;
+    score += 1000;
+    themeIdx = Math.min(completions, THEMES.length - 1);
+    flashMsg = 'Kingdom Complete! ' + THEMES[themeIdx] + ' Unlocked!';
+    flashClr = '#ffd700'; flashT = 5;
+    sfxSuccess(); setTimeout(sfxSuccess, 300);
+    ledRainbow(); setTimeout(ledRainbow, 600); setTimeout(ledRainbow, 1200);
+    updateStats();
+    document.getElementById('startBtn').textContent = 'New Kingdom';
+    document.getElementById('startBtn').disabled = false;
+
+    for (let i=0;i<60;i++) {
+        particles.push({
+            x: 530+(Math.random()-0.5)*300, y: 200+Math.random()*100,
+            vx: (Math.random()-0.5)*8, vy: -Math.random()*5-2,
+            life: 2, color: ['#ffd700','#00f5d4','#ff6b6b','#4488ff','#44ff88'][~~(Math.random()*5)],
+            size: Math.random()*4+2
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VILLAGER / BUILDING MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+function spawnVillager() {
+    const v = {
+        x: 150 + Math.random() * 760,
+        y: 395 + Math.random() * 35,
+        vx: (Math.random()-0.5)*0.6,
+        body: ['#f8d568','#e8a87c','#d4a5a5','#a8d8ea','#c3aed6'][~~(Math.random()*5)],
+        hat: ['#ff4444','#4488ff','#44ff88','#ffd700','#ff88ff'][~~(Math.random()*5)],
+        phase: Math.random()*Math.PI*2,
+        s: 0.8 + Math.random()*0.4,
+    };
+    vills.push(v);
+    // Spawn sparkles
+    for (let i=0;i<15;i++) particles.push({
+        x:v.x, y:v.y-10, vx:(Math.random()-0.5)*3, vy:-Math.random()*3-1,
+        life:1.2, color:'#ffd700', size:Math.random()*3+1
+    });
+    // Milestone buildings
+    if (villagers % 3 === 0 && blds.length < 10) {
+        blds.push({ x: 60+blds.length*110+Math.random()*30, type:~~(Math.random()*3), s:0.7+Math.random()*0.4 });
+    }
+    if (villagers % 2 === 0 && treez.length < 14) {
+        treez.push({ x: 30+Math.random()*1000, type:~~(Math.random()*3), s:0.5+Math.random()*0.6 });
+    }
+}
+
+function evictVillager() {
+    if (vills.length > 0) {
+        const v = vills.pop();
+        for (let i=0;i<20;i++) particles.push({
+            x:v.x, y:v.y-10, vx:(Math.random()-0.5)*2, vy:-Math.random()*2,
+            life:1.2, color:'#666', size:Math.random()*4+2
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  UI UPDATES
+// ═══════════════════════════════════════════════════════════════
+function updateStats() {
+    document.getElementById('villagerCount').textContent = villagers + ' / ' + WIN_COUNT;
+    document.getElementById('kingdomProgress').textContent = Math.min(100, Math.round(villagers/WIN_COUNT*100)) + '%';
+    document.getElementById('currentLayer').textContent = ['Bass','Chords','Melody'][layer];
+    document.getElementById('accuracy').textContent = curAcc > 0 ? curAcc + '%' : '--';
+    document.getElementById('score').textContent = score;
+}
+
+function updateLayerUI() {
+    const names = ['Bass','Chord','Melody'];
+    const ids = ['layerBass','layerChord','layerMelody'];
+    const pids = ['bassProgress','chordProgress','melodyProgress'];
+    const sids = ['bassStatus','chordStatus','melodyStatus'];
+    for (let i=0;i<3;i++) {
+        const el = document.getElementById(ids[i]);
+        el.classList.toggle('active-layer', layer===i);
+        el.classList.toggle('locked', locked[i]);
+        const p = document.getElementById(pids[i]);
+        const s = document.getElementById(sids[i]);
+        if (locked[i]) { p.style.width='100%'; s.textContent='Locked'; }
+        else if (layer===i) { p.style.width=curAcc+'%'; s.textContent='Playing'; }
+        else { p.style.width='0%'; s.textContent = i<=layer ? 'Ready' : 'Waiting'; }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDERING
+// ═══════════════════════════════════════════════════════════════
+function render(dt) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    frame++;
+
+    // ─── Sky ───
+    const skyPalettes = [
+        ['#1a1a3e','#2d1b69'], ['#1a0a2e','#3d1b69'],
+        ['#0a0a2a','#0d1b4a'], ['#0a2a3e','#1b4969']
+    ];
+    const sky = skyPalettes[themeIdx % skyPalettes.length];
+    const sg = ctx.createLinearGradient(0,0,0,H);
+    sg.addColorStop(0,sky[0]); sg.addColorStop(1,sky[1]);
+    ctx.fillStyle = sg; ctx.fillRect(0,0,W,H);
+
+    // Stars
+    for (let i=0; i<50; i++) {
+        const sx = (i*137.5 + frame*0.015) % W;
+        const sy = (i*89.3) % (H*0.55);
+        ctx.globalAlpha = (0.3 + 0.5*Math.sin(frame*0.025+i*1.7)) * 0.6;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(sx,sy,0.8+Math.sin(i)*0.5,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Moon
+    ctx.fillStyle = '#ffe9a0';
+    ctx.beginPath(); ctx.arc(920,55,22,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = sky[0];
+    ctx.beginPath(); ctx.arc(928,50,20,0,Math.PI*2); ctx.fill();
+
+    // ─── Ground ───
+    const gY = 400;
+    const gg = ctx.createLinearGradient(0,gY,0,H);
+    const grassP = [['#2d5a1e','#1a3a0e'],['#3a5a2e','#2a4a1e'],['#1a2a3e','#0a1a2e'],['#1a4a5e','#0a3a4e']];
+    const gp = grassP[themeIdx%grassP.length];
+    gg.addColorStop(0,gp[0]); gg.addColorStop(1,gp[1]);
+    ctx.fillStyle = gg; ctx.fillRect(0,gY,W,H-gY);
+
+    // Grass blades
+    ctx.strokeStyle = '#3a8a2e'; ctx.lineWidth = 1;
+    for (let i=0;i<80;i++) {
+        const gx = (i*13.5)%W;
+        const sw = Math.sin(frame*0.015+i*0.4)*2;
+        ctx.beginPath(); ctx.moveTo(gx,gY); ctx.lineTo(gx+sw,gY-4-Math.random()*2); ctx.stroke();
+    }
+
+    // Path
+    ctx.fillStyle = 'rgba(139,119,101,0.3)';
+    ctx.beginPath(); ctx.ellipse(W/2,gY+35,320,12,0,0,Math.PI*2); ctx.fill();
+
+    // Trees (behind buildings)
+    treez.forEach(t => drawTree(t.x,gY-3,t.s,t.type));
+
+    // Buildings
+    blds.forEach(b => drawBuilding(b.x,gY-3,b.s,b.type));
+
+    // Castle
+    drawCastle(W/2, gY, villagers);
+
+    // Villagers
+    vills.forEach(v => {
+        v.phase += dt*2;
+        v.x += v.vx;
+        if (v.x<80||v.x>980) v.vx=-v.vx;
+        if (Math.random()<0.003) v.vx=(Math.random()-0.5)*0.5;
+        drawVillager(v);
+    });
+
+    // Particles
+    particles = particles.filter(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life -= dt*1.5;
+        if (p.life <= 0) return false;
+        ctx.globalAlpha = Math.min(1, p.life);
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+        return true;
+    });
+    ctx.globalAlpha = 1;
+
+    // ─── HUD ───
+    drawPatternChart(15, 8, 360, 105);
+    drawBeatDots(410, 14);
+    drawAccuracyBar(680, 10, 210, 22);
+
+    // Bar counter
+    const bpm = DIFF[diff].tempo;
+    const beatMs = 60000/bpm;
+    const elapsed = state==='playing' ? performance.now()-loopStart : 0;
+    const curBar = Math.min(4, Math.floor(elapsed/beatMs/4)+1);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '13px Segoe UI'; ctx.textAlign = 'center';
+    ctx.fillText('Bar '+curBar+' of 4', 530, 26);
+
+    // Layer label
+    const lNames = ['BASS','CHORDS','MELODY'];
+    const lClrs = ['#ff4444','#4488ff','#44ff88'];
+    ctx.fillStyle = lClrs[layer];
+    ctx.font = 'bold 15px Segoe UI'; ctx.textAlign = 'right';
+    ctx.fillText(lNames[layer]+' Layer', W-18, 26);
+
+    // Locked indicators
+    for (let i=0;i<3;i++) {
+        const yy = 44 + i*15;
+        ctx.font = '11px Segoe UI';
+        ctx.fillStyle = locked[i] ? lClrs[i] : 'rgba(255,255,255,0.2)';
+        ctx.fillText(locked[i]?'LOCKED':'---', W-18, yy);
+        ctx.fillStyle = lClrs[i];
+        ctx.globalAlpha = locked[i] ? 0.8 : 0.2;
+        ctx.fillRect(W-80, yy-9, 6, 10);
+        ctx.globalAlpha = 1;
+    }
+
+    // Flash message
+    if (flashT > 0) {
+        flashT -= dt;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, flashT * 1.5);
+        ctx.fillStyle = flashClr;
+        ctx.font = 'bold 26px Segoe UI'; ctx.textAlign = 'center';
+        ctx.shadowColor = flashClr; ctx.shadowBlur = 25;
+        ctx.fillText(flashMsg, W/2, 175);
+        ctx.restore();
+    }
+
+    // Countdown
+    if (state === 'countdown') {
+        const n = Math.max(1, countdownLeft);
+        ctx.fillStyle = '#00f5d4';
+        ctx.font = 'bold 60px Segoe UI'; ctx.textAlign = 'center';
+        ctx.shadowColor = '#00f5d4'; ctx.shadowBlur = 30;
+        ctx.fillText(n, W/2, H/2);
+        ctx.shadowBlur = 0;
+        ctx.font = '18px Segoe UI';
+        ctx.fillText('Get Ready...', W/2, H/2 + 40);
+    }
+
+    // Paused
+    if (state === 'paused') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 32px Segoe UI';
+        ctx.textAlign = 'center'; ctx.fillText('PAUSED', W/2, H/2);
+    }
+
+    // Complete
+    if (state === 'complete') {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 34px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 30;
+        ctx.fillText('Kingdom Complete!', W/2, H/2-30);
+        ctx.shadowBlur = 0;
+        ctx.font = '18px Segoe UI'; ctx.fillStyle = '#fff';
+        ctx.fillText('Score: '+score+' | Theme: '+THEMES[themeIdx], W/2, H/2+5);
+        ctx.fillText('Press Start for New Kingdom', W/2, H/2+35);
+    }
+
+    // Idle welcome
+    if (state === 'idle' && villagers === 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.font = '17px Segoe UI'; ctx.textAlign = 'center';
+        ctx.fillText('Build your kingdom one loop at a time', W/2, 175);
+        ctx.font = '13px Segoe UI';
+        ctx.fillText('Lock Bass > Chords > Melody layers to spawn villagers', W/2, 200);
+        ctx.fillText('20 villagers = Kingdom Complete!', W/2, 222);
+    }
+
+    updateStats();
+    updateLayerUI();
+}
+
+// ─── Pattern scroll chart ───
+function drawPatternChart(x, y, w, h) {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, x, y, w, h, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    roundRect(ctx, x, y, w, h, 6); ctx.stroke();
+
+    if (pattern.length === 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.font = '12px Segoe UI'; ctx.textAlign = 'center';
+        ctx.fillText('Pattern Preview', x+w/2, y+h/2+4);
+        return;
+    }
+
+    ctx.save();
+    ctx.beginPath(); roundRect(ctx, x, y, w, h, 6); ctx.clip();
+
+    const bpm = DIFF[diff].tempo;
+    const beatMs = 60000/bpm;
+    const elapsed = state==='playing' ? performance.now()-loopStart : 0;
+    const curBeat = elapsed / beatMs;
+    const pxPerBeat = w / 8; // show ~8 beats at a time
+    const scrollX = curBeat * pxPerBeat;
+
+    const nRange = MIDI_HI - MIDI_LO;
+    const nH = (h-10) / nRange;
+    const lClrs = ['#ff4444','#4488ff','#44ff88'];
+
+    // Beat grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 0.5;
+    for (let b = 0; b < totalBeats+1; b++) {
+        const bx = x + 10 + b * pxPerBeat - scrollX;
+        if (bx < x || bx > x+w) continue;
+        ctx.beginPath(); ctx.moveTo(bx, y); ctx.lineTo(bx, y+h); ctx.stroke();
+    }
+
+    // Note blocks
+    pattern.forEach((ev, i) => {
+        const bx = x + 10 + ev.startBeat * pxPerBeat - scrollX;
+        const bw = Math.max(4, ev.durBeats * pxPerBeat - 2);
+        if (bx+bw < x || bx > x+w) return;
+
+        ev.notes.forEach(n => {
+            const ny = y + h - 5 - ((n - MIDI_LO) / nRange) * (h-10);
+            const isHit = hits[i];
+            const isCurrent = !isHit && Math.abs(ev.startBeat - curBeat) < 1;
+
+            ctx.globalAlpha = isHit ? 0.25 : (isCurrent ? 1 : 0.55);
+            ctx.fillStyle = isHit ? '#555' : (isCurrent ? '#fff' : lClrs[layer]);
+            ctx.fillRect(bx, ny - Math.max(nH,2)/2, bw, Math.max(nH, 2.5));
+
+            if (isCurrent) {
+                ctx.fillStyle = lClrs[layer];
+                ctx.globalAlpha = 0.3;
+                ctx.fillRect(bx-1, ny-Math.max(nH,2)/2-1, bw+2, Math.max(nH,2.5)+2);
+            }
+        });
+    });
+    ctx.globalAlpha = 1;
+
+    // Playhead
+    const phX = x + 10;
+    ctx.strokeStyle = '#00f5d4'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(phX, y); ctx.lineTo(phX, y+h); ctx.stroke();
+
+    ctx.restore();
+
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '9px Segoe UI'; ctx.textAlign = 'left';
+    ctx.fillText('PATTERN', x+5, y+12);
+}
+
+// ─── Beat dots ───
+function drawBeatDots(x, y) {
+    const bpm = DIFF[diff].tempo;
+    const beatMs = 60000/bpm;
+    const elapsed = state==='playing' ? performance.now()-loopStart : 0;
+    const curBeatI = Math.floor(elapsed/beatMs) % 4;
+
+    for (let i=0;i<4;i++) {
+        const bx = x + i*22;
+        const active = state==='playing' && curBeatI===i;
+        ctx.beginPath(); ctx.arc(bx+8,y+8,6,0,Math.PI*2);
+        ctx.fillStyle = active ? '#00f5d4' : 'rgba(255,255,255,0.12)';
+        if (active) { ctx.shadowColor='#00f5d4'; ctx.shadowBlur=10; }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Number
+        ctx.fillStyle = active ? '#000' : 'rgba(255,255,255,0.3)';
+        ctx.font = 'bold 8px Segoe UI'; ctx.textAlign = 'center';
+        ctx.fillText(i+1, bx+8, y+11);
+    }
+}
+
+// ─── Accuracy bar ───
+function drawAccuracyBar(x, y, w, h) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    roundRect(ctx,x,y,w,h,4); ctx.fill();
+    const pct = curAcc/100;
+    const fc = curAcc>=80 ? '#44ff88' : curAcc>=50 ? '#ffd700' : '#ff4444';
+    if (pct > 0) {
+        ctx.fillStyle = fc;
+        roundRect(ctx, x+2, y+2, Math.max(0,(w-4)*pct), h-4, 3); ctx.fill();
+    }
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Segoe UI'; ctx.textAlign = 'center';
+    ctx.fillText((curAcc>0?curAcc+'%':'--')+' accuracy', x+w/2, y+h/2+4);
+    // Threshold lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
+    [0.5, 0.8].forEach(t => {
+        ctx.setLineDash(t===0.8?[2,2]:[]);
+        ctx.beginPath(); ctx.moveTo(x+w*t,y); ctx.lineTo(x+w*t,y+h); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+}
+
+// ─── Castle ───
+function drawCastle(cx, gY, vc) {
+    const p = Math.min(1, vc/WIN_COUNT);
+    const cH = 50 + p*130;
+    const cW = 70 + p*70;
+    ctx.save(); ctx.translate(cx, gY);
+
+    // Foundation
+    ctx.fillStyle = '#8a7b6b';
+    ctx.fillRect(-cW/2, -18, cW, 18);
+    ctx.fillStyle = '#9a8b7b';
+    for (let i=0; i<cW/10; i++) {
+        ctx.fillRect(-cW/2+i*10+1, -17, 8, 7);
+        ctx.fillRect(-cW/2+i*10+5, -9, 8, 8);
+    }
+
+    if (vc >= 2) {
+        // Walls
+        const wH = cH*0.55;
+        ctx.fillStyle = '#a09080';
+        ctx.fillRect(-cW/2+5, -wH-18, cW-10, wH);
+        // Bricks
+        ctx.fillStyle = '#b0a090';
+        for (let r=0; r<Math.floor(wH/11); r++) {
+            for (let c=0; c<Math.floor((cW-10)/14); c++) {
+                const off = r%2===0?0:7;
+                ctx.fillRect(-cW/2+6+c*14+off, -wH-17+r*11+1, 12, 9);
+            }
+        }
+        // Door arch
+        ctx.fillStyle = '#4a3a2a';
+        ctx.beginPath();
+        ctx.moveTo(-10,-1); ctx.lineTo(-10,-28);
+        ctx.arc(0,-28,10,Math.PI,0); ctx.lineTo(10,-1); ctx.fill();
+        // Door handle
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.arc(4,-15,2,0,Math.PI*2); ctx.fill();
+    }
+
+    if (vc >= 5) {
+        // Towers
+        const tH = cH*0.75;
+        [-1,1].forEach(side => {
+            const tx = side*(cW/2+2);
+            ctx.fillStyle = '#908070';
+            ctx.fillRect(tx-10, -tH, 20, tH-18);
+            // Tower roof
+            ctx.fillStyle = side<0?'#cc4444':'#4488cc';
+            ctx.beginPath();
+            ctx.moveTo(tx-13,-tH); ctx.lineTo(tx,-tH-22); ctx.lineTo(tx+13,-tH); ctx.fill();
+            // Tower window
+            ctx.fillStyle = '#ffd700';
+            ctx.globalAlpha = 0.5+0.3*Math.sin(frame*0.04+side*2);
+            ctx.beginPath(); ctx.arc(tx,-tH+15,3,0,Math.PI*2); ctx.fill();
+            ctx.globalAlpha = 1;
+        });
+    }
+
+    if (vc >= 8) {
+        // Battlements
+        const bTop = -cH*0.55-18;
+        ctx.fillStyle = '#a09080';
+        for (let i=0; i<Math.floor(cW/11); i++) {
+            ctx.fillRect(-cW/2+5+i*11, bTop-7, 7, 7);
+        }
+    }
+
+    if (vc >= 12) {
+        // Center tower
+        const ctH = cH*1.05;
+        ctx.fillStyle = '#988878';
+        ctx.fillRect(-14, -ctH, 28, ctH-cH*0.55);
+        ctx.fillStyle = '#cc6644';
+        ctx.beginPath();
+        ctx.moveTo(-17,-ctH); ctx.lineTo(0,-ctH-28); ctx.lineTo(17,-ctH); ctx.fill();
+        // Glowing window
+        ctx.fillStyle = '#ffd700';
+        ctx.globalAlpha = 0.5+0.4*Math.sin(frame*0.04);
+        ctx.fillRect(-5,-ctH+12,10,12);
+        ctx.globalAlpha = 1;
+    }
+
+    if (vc >= 16) {
+        // Flags on towers
+        const fw = Math.sin(frame*0.06)*6;
+        [-1,1].forEach((side,idx) => {
+            const fx = side*(cW/2+2);
+            const fy = -cH*0.75-22;
+            ctx.strokeStyle = '#777'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(fx,fy-18); ctx.stroke();
+            ctx.fillStyle = idx===0?'#ff4444':'#4488ff';
+            ctx.beginPath();
+            ctx.moveTo(fx,fy-18); ctx.lineTo(fx+15*side+fw,fy-14); ctx.lineTo(fx,fy-10); ctx.fill();
+        });
+    }
+
+    if (vc >= 20) {
+        // Crown / banner
+        const bob = Math.sin(frame*0.035)*3;
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 13px Segoe UI'; ctx.textAlign = 'center';
+        ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 15;
+        ctx.fillText('KINGDOM', 0, -cH*1.05-35+bob);
+        ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+}
+
+// ─── Villager sprite ───
+function drawVillager(v) {
+    ctx.save(); ctx.translate(v.x, v.y);
+    const s = v.s;
+    const walk = Math.sin(v.phase)*2;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0,3*s,5*s,2*s,0,0,Math.PI*2); ctx.fill();
+    // Body
+    ctx.fillStyle = v.body;
+    ctx.fillRect(-4*s,-12*s,8*s,10*s);
+    // Head
+    ctx.beginPath(); ctx.arc(0,-15*s,4*s,0,Math.PI*2); ctx.fill();
+    // Hat
+    ctx.fillStyle = v.hat;
+    ctx.beginPath(); ctx.arc(0,-17*s,4.5*s,Math.PI,0); ctx.fill();
+    // Legs
+    ctx.strokeStyle = v.body; ctx.lineWidth = 2*s;
+    ctx.beginPath(); ctx.moveTo(-2*s,-2*s); ctx.lineTo(-2*s+walk,5*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(2*s,-2*s); ctx.lineTo(2*s-walk,5*s); ctx.stroke();
+    // Eyes
+    ctx.fillStyle = '#111';
+    ctx.fillRect(-2*s,-16*s,1.5*s,1.5*s);
+    ctx.fillRect(0.5*s,-16*s,1.5*s,1.5*s);
+    // Smile
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 0.8*s;
+    ctx.beginPath(); ctx.arc(0,-14*s,2*s,0.1*Math.PI,0.9*Math.PI); ctx.stroke();
+    ctx.restore();
+}
+
+// ─── Building ───
+function drawBuilding(x, gY, s, type) {
+    ctx.save(); ctx.translate(x, gY);
+    if (type === 0) {
+        // House
+        ctx.fillStyle = '#8b7355'; ctx.fillRect(-15*s,-25*s,30*s,25*s);
+        ctx.fillStyle = '#cc6644';
+        ctx.beginPath(); ctx.moveTo(-20*s,-25*s); ctx.lineTo(0,-42*s); ctx.lineTo(20*s,-25*s); ctx.fill();
+        ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-4*s,-12*s,8*s,12*s);
+        ctx.fillStyle = '#ffd700';
+        ctx.globalAlpha = 0.5+0.3*Math.sin(frame*0.03+x);
+        ctx.fillRect(6*s,-21*s,6*s,6*s); ctx.globalAlpha = 1;
+    } else if (type === 1) {
+        // Market
+        ctx.fillStyle = '#9b8b7b'; ctx.fillRect(-12*s,-15*s,24*s,15*s);
+        ctx.fillStyle = '#dd8844'; ctx.fillRect(-16*s,-20*s,32*s,5*s);
+        ['#ff6644','#44cc44','#ffcc44'].forEach((c,i) => {
+            ctx.fillStyle = c; ctx.fillRect((-8+i*6)*s,-13*s,4*s,4*s);
+        });
+    } else {
+        // Well
+        ctx.fillStyle = '#888'; ctx.fillRect(-8*s,-12*s,16*s,12*s);
+        ctx.fillStyle = '#aaa';
+        ctx.beginPath(); ctx.arc(0,-12*s,8*s,Math.PI,0); ctx.fill();
+        ctx.fillStyle = '#4488ff'; ctx.globalAlpha = 0.4;
+        ctx.fillRect(-5*s,-8*s,10*s,5*s); ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+}
+
+// ─── Tree ───
+function drawTree(x, gY, s, type) {
+    ctx.save(); ctx.translate(x, gY);
+    ctx.fillStyle = '#5a4a3a'; ctx.fillRect(-3*s,-18*s,6*s,18*s);
+    if (type === 0) {
+        ctx.fillStyle = '#2d7a1e';
+        ctx.beginPath(); ctx.arc(0,-26*s,11*s,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#3a9a2e';
+        ctx.beginPath(); ctx.arc(-3*s,-30*s,7*s,0,Math.PI*2); ctx.fill();
+    } else if (type === 1) {
+        ctx.fillStyle = '#1a5a0e';
+        for (let i=0;i<3;i++) {
+            ctx.beginPath();
+            ctx.moveTo((-11+i*3)*s, (-18-i*9)*s);
+            ctx.lineTo(0, (-30-i*9)*s);
+            ctx.lineTo((11-i*3)*s, (-18-i*9)*s);
+            ctx.fill();
+        }
+    } else {
+        ctx.fillStyle = '#2d6a1e';
+        [[-4,-20,7],[4,-20,7],[0,-25,6]].forEach(([bx,by,br]) => {
+            ctx.beginPath(); ctx.arc(bx*s,by*s,br*s,0,Math.PI*2); ctx.fill();
+        });
+    }
+    ctx.restore();
+}
+
+// Utility
+function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x+r,y); c.lineTo(x+w-r,y);
+    c.arcTo(x+w,y,x+w,y+r,r); c.lineTo(x+w,y+h-r);
+    c.arcTo(x+w,y+h,x+w-r,y+h,r); c.lineTo(x+r,y+h);
+    c.arcTo(x,y+h,x,y+h-r,r); c.lineTo(x,y+r);
+    c.arcTo(x,y,x+r,y,r); c.closePath();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════════
+let prevT = performance.now();
+
+function mainLoop(timestamp) {
+    const dt = Math.min(0.1, (timestamp - prevT) / 1000);
+    prevT = timestamp;
+    updateGame();
+    render(dt);
+    requestAnimationFrame(mainLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EVENT LISTENERS
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.code === 'KeyR') restartGame();
+    else if (e.code === 'Escape') restartGame();
+});
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        diff = btn.dataset.diff;
+    });
+});
+
+document.getElementById('masterVol').addEventListener('input', e => {
+    if (masterGain && !muted) masterGain.gain.value = e.target.value/100;
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+buildKeyboard();
+initMIDI();
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>

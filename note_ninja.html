@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Note Ninja — MIDI Arcade</title>
+<style>
+:root{
+    --bg:#05060f; --card-bg:rgba(15,23,42,0.7); --accent:#f472b6; --accent2:#fbbf24;
+    --text:#e2e8f0; --danger:#ef4444; --good:#34d399; --muted:#64748b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color:var(--text);
+    background: radial-gradient(ellipse at top, #1a0a20 0%, var(--bg) 60%);
+    min-height:100vh;
+    padding: 20px;
+}
+.container{max-width:1280px;margin:0 auto}
+.header{text-align:center;margin-bottom:14px}
+.header h1{
+    font-size:2.4em; font-weight:900; letter-spacing:-1px;
+    background: linear-gradient(135deg, #f472b6, #fbbf24);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.header .sub{color:var(--muted);font-size:0.85em;margin-top:4px}
+
+.midi-bar, .stats-row, .controls-row, .diff-row{
+    display:flex; gap:10px; align-items:center; justify-content:center;
+    flex-wrap:wrap; margin-bottom:10px;
+}
+.midi-bar{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:10px 16px;justify-content:space-between}
+.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;
+    background:#64748b;box-shadow:0 0 8px currentColor;margin-right:6px}
+.status-dot.live{background:#34d399;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.midi-btn{background:var(--accent);color:#fff;border:none;padding:6px 14px;
+    border-radius:8px;cursor:pointer;font-weight:600;font-size:0.82em}
+.midi-btn:hover{filter:brightness(1.1)}
+
+.stats-row{margin-bottom:10px}
+.stat-card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:8px 16px;text-align:center;min-width:80px}
+.stat-val{font-size:1.3em;font-weight:800;color:var(--accent)}
+.stat-label{font-size:0.68em;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+
+.diff-btn, .ctrl-btn{
+    background:var(--card-bg);border:1px solid rgba(255,255,255,0.12);
+    color:var(--text);padding:6px 14px;border-radius:8px;cursor:pointer;
+    font-size:0.82em;font-weight:600;transition:all 0.2s;
+}
+.diff-btn:hover, .ctrl-btn:hover{background:rgba(255,255,255,0.1)}
+.diff-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border-color:transparent;color:#fff}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed}
+.ctrl-btn.paused{border-color:#fbbf24;color:#fbbf24}
+.ctrl-btn.practice.active{border-color:var(--good);color:var(--good);background:rgba(52,211,153,0.08)}
+.kbd{display:inline-block;padding:1px 6px;border-radius:4px;
+    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);
+    font-family:ui-monospace,monospace;font-size:0.72em;color:#cbd5e1;margin-left:4px}
+.shortcuts{text-align:center;color:var(--muted);font-size:0.72em;margin-bottom:8px}
+
+.game-wrapper{position:relative;margin-bottom:14px}
+.game-canvas{width:100%;background:#0a0a14;border-radius:16px;display:block;
+    box-shadow:0 10px 40px rgba(0,0,0,0.5)}
+.game-overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:rgba(5,6,15,0.88);border-radius:16px;padding:30px}
+.game-overlay.hidden{display:none}
+.overlay-title{font-size:2.6em;font-weight:900;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px}
+.overlay-sub{color:#cbd5e1;margin-bottom:20px;font-size:0.95em}
+.start-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#fff;border:none;padding:12px 32px;border-radius:10px;cursor:pointer;
+    font-size:1.1em;font-weight:700;letter-spacing:1px}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(244,114,182,0.4)}
+.pause-banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(15,23,42,0.88);border:2px solid var(--accent);
+    border-radius:16px;padding:22px 44px;text-align:center;display:none;z-index:20}
+.pause-banner.visible{display:block}
+.pause-banner-title{font-size:2.2em;font-weight:800;
+    background:linear-gradient(135deg,#fbbf24,#f472b6);
+    -webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:4px}
+.practice-badge{position:absolute;top:10px;left:10px;
+    background:rgba(52,211,153,0.15);border:1px solid var(--good);
+    color:var(--good);padding:4px 10px;border-radius:6px;
+    font-size:0.72em;font-weight:700;letter-spacing:1px;display:none;z-index:15}
+.practice-badge.visible{display:block}
+
+.back-link{display:inline-block;color:var(--muted);text-decoration:none;
+    font-size:0.82em;margin-bottom:10px;padding:4px 10px;border-radius:6px}
+.back-link:hover{color:var(--accent);background:rgba(255,255,255,0.05)}
+
+.keyboard-section{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);
+    border-radius:12px;padding:10px;margin-top:10px}
+.keyboard-label{text-align:center;color:var(--muted);font-size:0.78em;margin-bottom:8px}
+.keyboard{display:flex;justify-content:center;position:relative;height:100px}
+.key{position:relative;border:1px solid #334155;transition:all 0.1s}
+.key.white{width:26px;height:100px;background:#e5e7eb;z-index:1}
+.key.black{width:16px;height:62px;background:#0f172a;margin:0 -8px;z-index:2;border-color:#64748b}
+.key.white.led-hint{background:#93c5fd;box-shadow:inset 0 0 15px #3b82f6}
+.key.white.led-active{background:#fbbf24;box-shadow:inset 0 0 15px #d97706}
+.key.white.led-danger{background:#fca5a5;box-shadow:inset 0 0 15px #dc2626}
+.key.black.led-hint{background:#3b82f6}
+.key.black.led-active{background:#d97706}
+.key.black.led-danger{background:#dc2626}
+</style>
+</head>
+<body>
+<div class="container">
+    <a class="back-link" href="midi_arcade.html">← Back to Arcade</a>
+    <div class="header">
+        <h1>🥷 Note Ninja</h1>
+        <div class="sub">Slice single notes by pressing the exact key on your MIDI keyboard</div>
+    </div>
+
+    <div class="midi-bar">
+        <div><span class="status-dot" id="statusDot"></span><span id="midiStatusText">MIDI not connected</span></div>
+        <div style="display:flex;gap:8px">
+            <span id="deviceName" style="color:#64748b;font-size:0.8em"></span>
+            <button class="midi-btn" onclick="connectMIDI()">Connect MIDI</button>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="scoreVal">0</div><div class="stat-label">Score</div></div>
+        <div class="stat-card"><div class="stat-val" id="comboVal">0</div><div class="stat-label">Combo</div></div>
+        <div class="stat-card"><div class="stat-val" id="hpVal">100</div><div class="stat-label">HP</div></div>
+        <div class="stat-card"><div class="stat-val" id="slicedVal">0</div><div class="stat-label">Sliced</div></div>
+        <div class="stat-card"><div class="stat-val" id="accVal">100%</div><div class="stat-label">Accuracy</div></div>
+    </div>
+
+    <div class="diff-row">
+        <button class="diff-btn active" data-diff="easy">Easy · C Major</button>
+        <button class="diff-btn" data-diff="medium">Medium · ± Accidentals</button>
+        <button class="diff-btn" data-diff="hard">Hard · Chromatic + Bombs</button>
+    </div>
+
+    <div class="controls-row">
+        <button class="ctrl-btn paused-btn" id="pauseBtn" onclick="togglePause()" disabled>Pause<span class="kbd">Space</span></button>
+        <button class="ctrl-btn" id="restartBtn" onclick="restartGame()" disabled>Restart<span class="kbd">R</span></button>
+        <button class="ctrl-btn practice" id="practiceBtn" onclick="togglePractice()">Practice<span class="kbd">P</span></button>
+    </div>
+    <div class="shortcuts">
+        <span class="kbd">Space</span> Pause
+        <span class="kbd">R</span> Restart
+        <span class="kbd">P</span> Practice
+        <span class="kbd">Esc</span> Quit
+    </div>
+
+    <div class="game-wrapper">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="440"></canvas>
+        <div class="pause-banner" id="pauseBanner">
+            <div class="pause-banner-title">PAUSED</div>
+            <div style="color:#cbd5e1;font-size:0.85em">Press <b>Space</b> to resume</div>
+        </div>
+        <div class="practice-badge" id="practiceBadge">PRACTICE MODE</div>
+        <div class="game-overlay" id="gameOverlay">
+            <div class="overlay-title" id="overlayTitle">Note Ninja</div>
+            <div class="overlay-sub" id="overlaySub">
+                Notes fly across the screen. Press the exact key to slice them.<br>
+                Miss bombs (red notes) or they'll damage you.
+            </div>
+            <button class="start-btn" onclick="startGame()" id="startBtn">Start Game</button>
+        </div>
+    </div>
+
+    <div class="keyboard-section">
+        <div class="keyboard-label">PartyKeys 36 Keys — LED Preview</div>
+        <div class="keyboard" id="keyboard"></div>
+    </div>
+</div>
+
+<script>
+// ══════ CONSTANTS ══════
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const PK_START = 48, PK_END = 83;
+const C_MAJOR = [0,2,4,5,7,9,11]; // diatonic pitch classes
+
+// ══════ GAME STATE ══════
+let game = {
+    running: false, paused: false, practiceMode: false,
+    score: 0, combo: 0, maxCombo: 0, hp: 100, maxHp: 100,
+    sliced: 0, missed: 0, tries: 0,
+    difficulty: 'easy',
+    notes: [], particles: [], floatingTexts: [],
+    lastSpawn: 0, spawnInterval: 1200, noteSpeed: 3,
+    animFrame: null, frameCount: 0,
+    damageFlash: 0, pausedAt: null,
+    powerUp: null, powerUpEnd: 0 // 'slowmo','freeze','double'
+};
+
+let midiAccess = null, midiOutput = null;
+let audioCtx = null, masterGain = null;
+let currentTheme = 'arcade';
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ══════ AUDIO ══════
+function initAudio(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.6;
+    masterGain.connect(audioCtx.destination);
+}
+function midiToFreq(m){ return 440 * Math.pow(2,(m-69)/12); }
+function playSliceSound(midi){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(midiToFreq(midi), t);
+    osc.frequency.exponentialRampToValueAtTime(midiToFreq(midi)*2, t+0.15);
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+    osc.connect(gain); gain.connect(masterGain);
+    osc.start(t); osc.stop(t+0.3);
+}
+function playBombSound(){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t+0.3);
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+    osc.connect(gain); gain.connect(masterGain);
+    osc.start(t); osc.stop(t+0.35);
+}
+function playPowerUpSound(){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime;
+    [0,4,7,12].forEach((n,i)=>{
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = midiToFreq(72+n);
+        gain.gain.setValueAtTime(0.2, t+i*0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, t+i*0.05+0.3);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t+i*0.05); osc.stop(t+i*0.05+0.35);
+    });
+}
+
+// ══════ MIDI ══════
+async function connectMIDI(){
+    try{
+        midiAccess = await navigator.requestMIDIAccess({sysex:true});
+        let input=null, output=null;
+        for(const i of midiAccess.inputs.values()){ input=i; break; }
+        for(const o of midiAccess.outputs.values()){ output=o; break; }
+        if(input){
+            input.onmidimessage = onMIDIMessage;
+            document.getElementById('statusDot').classList.add('live');
+            document.getElementById('midiStatusText').textContent = 'MIDI connected';
+            document.getElementById('deviceName').textContent = input.name;
+        } else {
+            document.getElementById('midiStatusText').textContent = 'No MIDI input found';
+        }
+        if(output) midiOutput = output;
+    } catch(e){
+        document.getElementById('midiStatusText').textContent = 'MIDI permission denied';
+    }
+}
+function onMIDIMessage(ev){
+    const [status, note, vel] = ev.data;
+    const cmd = status & 0xF0;
+    if(cmd === 0x90 && vel > 0){ onNoteOn(note); }
+}
+function setLED(midiNote, color){
+    if(!midiOutput) return;
+    const map = {off:0,red:10,green:30,blue:50,yellow:70,cyan:90,purple:110,white:125};
+    const v = map[color] || 0;
+    midiOutput.send(v===0 ? [0x80, midiNote, 0] : [0x90, midiNote, v]);
+}
+function clearAllLEDs(){ for(let n=PK_START;n<=PK_END;n++) setLED(n,'off'); }
+function lightLED(midi, color){ setLED(midi, color); }
+
+// ══════ KEYBOARD UI ══════
+function buildKeyboard(){
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+    const whiteMidis = [], blackOverlays = [];
+    for(let m=PK_START; m<=PK_END; m++){
+        const pc = m % 12;
+        const isBlack = [1,3,6,8,10].includes(pc);
+        if(!isBlack) whiteMidis.push(m);
+    }
+    // Render white keys
+    whiteMidis.forEach(m=>{
+        const k = document.createElement('div');
+        k.className = 'key white';
+        k.dataset.midi = m;
+        kb.appendChild(k);
+    });
+    // Overlay black keys absolutely
+    // Simpler: use a flex layout row where each white key is 26px, black overlays at -8px margin
+    // Rebuild with white + black sequence
+    kb.innerHTML = '';
+    for(let m=PK_START; m<=PK_END; m++){
+        const pc = m % 12;
+        const isBlack = [1,3,6,8,10].includes(pc);
+        const k = document.createElement('div');
+        k.className = 'key ' + (isBlack?'black':'white');
+        k.dataset.midi = m;
+        kb.appendChild(k);
+    }
+}
+function highlightVirtualKey(midi, cls){
+    const el = document.querySelector(`.key[data-midi="${midi}"]`);
+    if(el){ el.classList.remove('led-hint','led-active','led-danger'); el.classList.add(cls); }
+}
+function clearVirtualKey(midi){
+    const el = document.querySelector(`.key[data-midi="${midi}"]`);
+    if(el) el.classList.remove('led-hint','led-active','led-danger');
+}
+function clearAllVirtualKeys(){
+    document.querySelectorAll('.key').forEach(k=>k.classList.remove('led-hint','led-active','led-danger'));
+}
+
+// ══════ GAMEPLAY ══════
+function spawnNote(){
+    const diff = game.difficulty;
+    let pool;
+    if(diff === 'easy'){
+        pool = [];
+        for(let m=PK_START; m<=PK_END; m++){ if(C_MAJOR.includes(m%12)) pool.push({midi:m,bomb:false}); }
+    } else if(diff === 'medium'){
+        pool = [];
+        for(let m=PK_START; m<=PK_END; m++){
+            const diatonic = C_MAJOR.includes(m%12);
+            pool.push({midi:m, bomb: !diatonic && Math.random() < 0.35});
+        }
+    } else {
+        pool = [];
+        for(let m=PK_START; m<=PK_END; m++){
+            const diatonic = C_MAJOR.includes(m%12);
+            pool.push({midi:m, bomb: !diatonic && Math.random() < 0.5});
+        }
+    }
+    const pick = pool[Math.floor(Math.random()*pool.length)];
+    // Randomly spawn a power-up 5% of the time (not bombs)
+    const isPower = !pick.bomb && Math.random() < 0.06;
+    const powerType = isPower ? ['slowmo','freeze','double'][Math.floor(Math.random()*3)] : null;
+    // Arc: start at right edge, sometimes bottom
+    const fromBottom = Math.random() < 0.4;
+    const note = {
+        midi: pick.midi,
+        name: NOTE_NAMES[pick.midi%12] + Math.floor(pick.midi/12 - 1),
+        bomb: pick.bomb,
+        power: powerType,
+        x: fromBottom ? 200 + Math.random()*600 : canvas.width + 30,
+        y: fromBottom ? canvas.height + 30 : 60 + Math.random()*120,
+        vx: fromBottom ? (Math.random()*2 - 1)*1.2 : -(game.noteSpeed + Math.random()*1.5),
+        vy: fromBottom ? -(game.noteSpeed*1.4 + Math.random()*1) : 0.8 + Math.random()*1.2,
+        rot: 0,
+        rotSpeed: (Math.random()-0.5)*0.1,
+        sliced: false,
+        sliceTimer: 0
+    };
+    game.notes.push(note);
+}
+
+function onNoteOn(midi){
+    if(!game.running || game.paused) return;
+    // Find the closest unsliced note with matching midi within slice zone
+    let best = null, bestDist = Infinity;
+    for(const n of game.notes){
+        if(n.sliced) continue;
+        if(n.midi !== midi) continue;
+        if(n.x < 0 || n.x > canvas.width+50 || n.y < 0 || n.y > canvas.height+50) continue;
+        const d = Math.abs(n.x - canvas.width/2);
+        if(d < bestDist){ best = n; bestDist = d; }
+    }
+    if(best){
+        sliceNote(best);
+    } else {
+        // Press without target = small combo reset
+        game.tries++;
+        updateStats();
+    }
+}
+
+function sliceNote(n){
+    n.sliced = true;
+    n.sliceTimer = 20;
+    game.tries++;
+    if(n.bomb){
+        if(!game.practiceMode){
+            game.hp = Math.max(0, game.hp - 15);
+            game.damageFlash = 20;
+            game.combo = 0;
+            spawnFloatingText(n.x, n.y, '-15 HP (BOMB)', '#ef4444');
+            playBombSound();
+            if(game.hp <= 0){ endGame(); return; }
+        } else {
+            spawnFloatingText(n.x, n.y, 'practice', '#34d399');
+        }
+        spawnParticles(n.x, n.y, '#ef4444', 18);
+    } else if(n.power){
+        activatePowerUp(n.power);
+        spawnFloatingText(n.x, n.y, `★ ${n.power.toUpperCase()}`, '#fbbf24');
+        spawnParticles(n.x, n.y, '#fbbf24', 24);
+        playPowerUpSound();
+    } else {
+        game.combo++;
+        if(game.combo > game.maxCombo) game.maxCombo = game.combo;
+        const mult = (game.powerUp === 'double') ? 2 : 1;
+        const pts = (10 + Math.min(game.combo, 20)) * mult;
+        game.score += pts;
+        game.sliced++;
+        spawnFloatingText(n.x, n.y, `+${pts}${mult>1?' ×2':''}`, '#34d399');
+        spawnParticles(n.x, n.y, '#f472b6', 12);
+        playSliceSound(n.midi);
+        highlightVirtualKey(n.midi, 'led-active');
+        lightLED(n.midi, 'green');
+        setTimeout(()=>{ clearVirtualKey(n.midi); setLED(n.midi,'off'); }, 200);
+    }
+    updateStats();
+}
+
+function activatePowerUp(type){
+    game.powerUp = type;
+    game.powerUpEnd = performance.now() + (type==='slowmo'?6000 : type==='freeze'?2500 : 8000);
+}
+
+function spawnParticles(x,y,color,count){
+    for(let i=0;i<count;i++){
+        game.particles.push({
+            x,y,
+            vx:(Math.random()-0.5)*8, vy:(Math.random()-0.5)*8-2,
+            life:30+Math.random()*20, maxLife:40, color
+        });
+    }
+}
+function spawnFloatingText(x,y,text,color){
+    game.floatingTexts.push({x,y,text,color,life:60,maxLife:60});
+}
+
+// ══════ UPDATE/RENDER ══════
+function startGame(){
+    initAudio();
+    game.running = true;
+    game.paused = false;
+    document.getElementById('pauseBanner').classList.remove('visible');
+    document.getElementById('pauseBtn').disabled = false;
+    document.getElementById('restartBtn').disabled = false;
+    document.getElementById('practiceBadge').classList.toggle('visible', game.practiceMode);
+    game.score = 0; game.combo = 0; game.maxCombo = 0;
+    game.hp = 100; game.maxHp = 100;
+    game.sliced = 0; game.missed = 0; game.tries = 0;
+    game.notes = []; game.particles = []; game.floatingTexts = [];
+    game.frameCount = 0; game.damageFlash = 0;
+    game.powerUp = null; game.powerUpEnd = 0;
+    game.spawnInterval = game.difficulty==='easy'?1400 : game.difficulty==='medium'?1000 : 700;
+    game.noteSpeed = game.difficulty==='easy'?2.8 : game.difficulty==='medium'?3.5 : 4.4;
+    game.lastSpawn = performance.now();
+    clearAllLEDs();
+    clearAllVirtualKeys();
+    updateStats();
+    document.getElementById('gameOverlay').classList.add('hidden');
+    if(game.animFrame) cancelAnimationFrame(game.animFrame);
+    gameLoop();
+}
+
+function gameLoop(){
+    if(!game.running) return;
+    if(!game.paused){
+        game.frameCount++;
+        update();
+    }
+    render();
+    game.animFrame = requestAnimationFrame(gameLoop);
+}
+
+function update(){
+    const now = performance.now();
+    // Power-up expiry
+    if(game.powerUp && now >= game.powerUpEnd){ game.powerUp = null; }
+
+    // Spawn
+    if(game.powerUp !== 'freeze' && now - game.lastSpawn > game.spawnInterval){
+        spawnNote();
+        game.lastSpawn = now;
+    }
+
+    if(game.damageFlash > 0) game.damageFlash--;
+
+    const speedMul = (game.powerUp === 'slowmo') ? 0.4 : (game.powerUp === 'freeze' ? 0 : 1);
+
+    // Update notes
+    for(let i=game.notes.length-1;i>=0;i--){
+        const n = game.notes[i];
+        if(n.sliced){
+            n.sliceTimer--;
+            if(n.sliceTimer <= 0){ game.notes.splice(i,1); }
+            continue;
+        }
+        n.x += n.vx * speedMul;
+        n.y += n.vy * speedMul;
+        n.vy += 0.05 * speedMul; // gravity
+        n.rot += n.rotSpeed * speedMul;
+        // Off-screen = miss
+        if(n.x < -60 || n.y > canvas.height + 60 || n.x > canvas.width + 100){
+            if(!n.bomb){
+                game.missed++;
+                game.combo = 0;
+                if(!game.practiceMode){
+                    game.hp = Math.max(0, game.hp - 5);
+                    game.damageFlash = 10;
+                }
+                if(game.hp <= 0){ endGame(); return; }
+            }
+            game.notes.splice(i,1);
+            updateStats();
+        }
+    }
+
+    // Particles
+    for(let i=game.particles.length-1;i>=0;i--){
+        const p = game.particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.3;
+        p.life--;
+        if(p.life <= 0) game.particles.splice(i,1);
+    }
+    // Floating texts
+    for(let i=game.floatingTexts.length-1;i>=0;i--){
+        const ft = game.floatingTexts[i];
+        ft.y -= 0.8; ft.life--;
+        if(ft.life <= 0) game.floatingTexts.splice(i,1);
+    }
+}
+
+function render(){
+    const W=canvas.width, H=canvas.height;
+    // Background
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0,'#1a0a20'); grad.addColorStop(1,'#0a0a14');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+
+    // Damage flash
+    if(game.damageFlash > 0){
+        ctx.fillStyle = `rgba(239,68,68,${game.damageFlash/40})`;
+        ctx.fillRect(0,0,W,H);
+    }
+
+    // Draw slice zone indicator (center)
+    ctx.strokeStyle = 'rgba(244,114,182,0.15)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8,8]);
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Power-up banner
+    if(game.powerUp){
+        const remain = Math.max(0, (game.powerUpEnd - performance.now())/1000);
+        ctx.fillStyle = 'rgba(251,191,36,0.15)';
+        ctx.fillRect(W/2 - 120, 10, 240, 36);
+        ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
+        ctx.strokeRect(W/2 - 120, 10, 240, 36);
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`★ ${game.powerUp.toUpperCase()} · ${remain.toFixed(1)}s`, W/2, 34);
+    }
+
+    // HP bar
+    const hpW = 280, hpH = 18;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(20, 20, hpW, hpH);
+    const hpGrad = ctx.createLinearGradient(20,0,20+hpW,0);
+    if(game.hp > 60){ hpGrad.addColorStop(0,'#34d399'); hpGrad.addColorStop(1,'#10b981'); }
+    else if(game.hp > 30){ hpGrad.addColorStop(0,'#fbbf24'); hpGrad.addColorStop(1,'#f59e0b'); }
+    else { hpGrad.addColorStop(0,'#ef4444'); hpGrad.addColorStop(1,'#dc2626'); }
+    ctx.fillStyle = hpGrad;
+    ctx.fillRect(20, 20, hpW * game.hp / game.maxHp, hpH);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.strokeRect(20, 20, hpW, hpH);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(`HP ${game.hp}/${game.maxHp}`, 24, 34);
+
+    // Notes
+    for(const n of game.notes){
+        ctx.save();
+        ctx.translate(n.x, n.y);
+        ctx.rotate(n.rot);
+        const baseR = 30;
+        const scale = n.sliced ? 1 + (20 - n.sliceTimer)/10 : 1;
+        const alpha = n.sliced ? n.sliceTimer/20 : 1;
+        ctx.globalAlpha = alpha;
+        // Body
+        if(n.bomb){
+            ctx.fillStyle = '#7f1d1d';
+            ctx.beginPath(); ctx.arc(0,0,baseR*scale,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3;
+            ctx.stroke();
+            // Spikes
+            ctx.fillStyle = '#dc2626';
+            for(let a=0;a<8;a++){
+                const ang = a*Math.PI/4;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(ang)*baseR*scale, Math.sin(ang)*baseR*scale);
+                ctx.lineTo(Math.cos(ang)*(baseR+8)*scale, Math.sin(ang)*(baseR+8)*scale);
+                ctx.lineTo(Math.cos(ang+0.2)*baseR*scale, Math.sin(ang+0.2)*baseR*scale);
+                ctx.closePath(); ctx.fill();
+            }
+        } else if(n.power){
+            const glow = 0.6 + Math.sin(game.frameCount*0.2)*0.4;
+            ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 20*glow;
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath(); ctx.arc(0,0,baseR*scale,0,Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#92400e';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText('★', 0, 0);
+        } else {
+            const grad2 = ctx.createRadialGradient(-5,-5,2,0,0,baseR*scale);
+            grad2.addColorStop(0,'#fbcfe8'); grad2.addColorStop(1,'#ec4899');
+            ctx.fillStyle = grad2;
+            ctx.beginPath(); ctx.arc(0,0,baseR*scale,0,Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        // Label
+        if(!n.power){
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.rotate(-n.rot);
+            ctx.fillText(n.name, 0, 0);
+        }
+        ctx.restore();
+    }
+
+    // Particles
+    ctx.globalAlpha = 1;
+    for(const p of game.particles){
+        const a = p.life/p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = a;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 3*a, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Floating texts
+    for(const ft of game.floatingTexts){
+        ctx.globalAlpha = ft.life/ft.maxLife;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x, ft.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // Score bar
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${game.score}`, W - 20, 36);
+}
+
+function updateStats(){
+    document.getElementById('scoreVal').textContent = game.score;
+    document.getElementById('comboVal').textContent = game.combo;
+    document.getElementById('hpVal').textContent = game.hp;
+    document.getElementById('slicedVal').textContent = game.sliced;
+    const acc = game.tries === 0 ? 100 : Math.round(game.sliced / game.tries * 100);
+    document.getElementById('accVal').textContent = acc + '%';
+}
+
+function endGame(){
+    game.running = false;
+    game.paused = false;
+    document.getElementById('pauseBtn').disabled = true;
+    document.getElementById('restartBtn').disabled = true;
+    document.getElementById('pauseBanner').classList.remove('visible');
+    clearAllLEDs();
+    clearAllVirtualKeys();
+    const ov = document.getElementById('gameOverlay');
+    ov.classList.remove('hidden');
+    document.getElementById('overlayTitle').textContent = 'Game Over';
+    const acc = game.tries === 0 ? 100 : Math.round(game.sliced / game.tries * 100);
+    const stars = acc >= 95 ? '★★★' : acc >= 85 ? '★★' : acc >= 70 ? '★' : '—';
+    document.getElementById('overlaySub').innerHTML = `
+        <div style="font-size:2em;color:#fbbf24;margin-bottom:10px">${stars}</div>
+        Score: <b>${game.score}</b> · Sliced: <b>${game.sliced}</b><br>
+        Max combo: <b>${game.maxCombo}</b> · Accuracy: <b>${acc}%</b>`;
+    document.getElementById('startBtn').textContent = 'Play Again';
+}
+
+// ══════ PAUSE / RESTART / PRACTICE ══════
+function togglePause(){
+    if(!game.running) return;
+    game.paused = !game.paused;
+    const banner = document.getElementById('pauseBanner');
+    const btn = document.getElementById('pauseBtn');
+    if(game.paused){
+        banner.classList.add('visible');
+        btn.classList.add('paused');
+        btn.innerHTML = 'Resume<span class="kbd">Space</span>';
+        game.pausedAt = performance.now();
+    } else {
+        banner.classList.remove('visible');
+        btn.classList.remove('paused');
+        btn.innerHTML = 'Pause<span class="kbd">Space</span>';
+        if(game.pausedAt){
+            const delta = performance.now() - game.pausedAt;
+            game.lastSpawn += delta;
+            if(game.powerUpEnd > 0) game.powerUpEnd += delta;
+            game.pausedAt = null;
+        }
+    }
+}
+function restartGame(){
+    if(game.animFrame) cancelAnimationFrame(game.animFrame);
+    game.running = false;
+    game.paused = false;
+    document.getElementById('pauseBanner').classList.remove('visible');
+    clearAllLEDs();
+    clearAllVirtualKeys();
+    startGame();
+}
+function togglePractice(){
+    game.practiceMode = !game.practiceMode;
+    const btn = document.getElementById('practiceBtn');
+    const badge = document.getElementById('practiceBadge');
+    if(game.practiceMode){
+        btn.classList.add('active');
+        badge.classList.add('visible');
+    } else {
+        btn.classList.remove('active');
+        badge.classList.remove('visible');
+    }
+}
+
+// Auto-pause on tab switch
+document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden && game.running && !game.paused) togglePause();
+});
+window.addEventListener('blur', ()=>{
+    if(game.running && !game.paused) togglePause();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e=>{
+    if(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if(e.code === 'Space' || e.key === ' '){
+        if(game.running){ togglePause(); e.preventDefault(); }
+        return;
+    }
+    if(e.key === 'r' || e.key === 'R'){
+        if(game.running){ restartGame(); e.preventDefault(); } return;
+    }
+    if(e.key === 'p' || e.key === 'P'){
+        togglePractice(); e.preventDefault(); return;
+    }
+    if(e.key === 'Escape'){
+        if(game.running){
+            if(game.paused) togglePause();
+            endGame();
+            e.preventDefault();
+        }
+        return;
+    }
+});
+
+// Difficulty buttons
+document.querySelectorAll('.diff-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+        document.querySelectorAll('.diff-btn').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+        game.difficulty = b.dataset.diff;
+    });
+});
+
+// ══════ INIT ══════
+buildKeyboard();
+connectMIDI();
+</script>
+</body>
+</html>

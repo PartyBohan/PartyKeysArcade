@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chord Detective - MIDI Keyboard Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg1: #0a0a1a;
+            --bg2: #1a0a1a;
+            --accent: #fbbf24;
+            --danger: #ff6b6b;
+            --text: #e0e0e0;
+            --card-bg: rgba(255,255,255,0.05);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg1), var(--bg2));
+            min-height: 100vh;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 10px 15px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .header h1 {
+            font-size: 1.6em;
+            background: linear-gradient(135deg, var(--accent), #f97316);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 1px;
+        }
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* MIDI Status */
+        .midi-bar {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.85em;
+        }
+
+        .status-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+        .status-dot.connected { background: #10b981; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+        .midi-btn {
+            background: linear-gradient(135deg, var(--accent), #f97316);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 6px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: transform 0.15s;
+        }
+        .midi-btn:hover { transform: scale(1.05); }
+
+        /* Stats Row */
+        .stats-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 80px;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 8px 12px;
+            text-align: center;
+        }
+        .stat-val { font-size: 1.3em; font-weight: 700; color: var(--accent); }
+        .stat-label { font-size: 0.65em; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Game Canvas */
+        .game-wrapper {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.1);
+            margin-bottom: 8px;
+        }
+        .game-canvas {
+            display: block;
+            width: 100%;
+            background: #000;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(6px);
+            z-index: 10;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .game-overlay.hidden { display: none; }
+        .overlay-title {
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), #f97316);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .overlay-sub { font-size: 1em; color: #94a3b8; }
+        .start-btn {
+            background: linear-gradient(135deg, var(--accent), #f97316);
+            border: none;
+            color: #000;
+            font-weight: 700;
+            padding: 12px 36px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .start-btn:hover { transform: scale(1.08); }
+
+        /* Piano Keyboard */
+        .keyboard-section {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 10px;
+            text-align: center;
+        }
+        .keyboard-label {
+            font-size: 0.75em;
+            color: #64748b;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .keyboard {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            height: 110px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .key {
+            position: relative;
+            border-radius: 0 0 5px 5px;
+            cursor: pointer;
+            transition: background 0.15s, box-shadow 0.15s;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            user-select: none;
+        }
+        .key.white {
+            width: 24px;
+            height: 100px;
+            background: linear-gradient(to bottom, #f8f8f8, #e8e8e8);
+            border: 1px solid #ccc;
+            z-index: 0;
+        }
+        .key.black {
+            width: 16px;
+            height: 65px;
+            background: linear-gradient(to bottom, #333, #111);
+            border: 1px solid #000;
+            margin: 0 -8px;
+            z-index: 1;
+        }
+        .key-label {
+            font-size: 0.55em;
+            font-weight: 700;
+            pointer-events: none;
+        }
+        .key.white .key-label { color: #555; }
+        .key.black .key-label { color: #aaa; }
+
+        /* Keyboard LED states */
+        .key.led-blue.white {
+            background: linear-gradient(to bottom, #93c5fd, #60a5fa) !important;
+            box-shadow: 0 0 14px rgba(96,165,250,0.7);
+        }
+        .key.led-blue.black {
+            background: linear-gradient(to bottom, #667eea, #4f46e5) !important;
+            box-shadow: 0 0 14px rgba(79,70,229,0.7);
+        }
+        .key.led-green.white {
+            background: linear-gradient(to bottom, #86efac, #4ade80) !important;
+            box-shadow: 0 0 16px rgba(74,222,128,0.7);
+        }
+        .key.led-green.black {
+            background: linear-gradient(to bottom, #22c55e, #16a34a) !important;
+            box-shadow: 0 0 16px rgba(34,197,94,0.7);
+        }
+        .key.led-red.white {
+            background: linear-gradient(to bottom, #fca5a5, #f87171) !important;
+            box-shadow: 0 0 16px rgba(248,113,113,0.7);
+        }
+        .key.led-red.black {
+            background: linear-gradient(to bottom, #ef4444, #dc2626) !important;
+            box-shadow: 0 0 16px rgba(239,68,68,0.7);
+        }
+        .key.led-cyan.white {
+            background: linear-gradient(to bottom, #67e8f9, #22d3ee) !important;
+            box-shadow: 0 0 16px rgba(34,211,238,0.7);
+        }
+        .key.led-cyan.black {
+            background: linear-gradient(to bottom, #06b6d4, #0891b2) !important;
+            box-shadow: 0 0 16px rgba(6,182,212,0.7);
+        }
+        .key.led-yellow.white {
+            background: linear-gradient(to bottom, #fde68a, #fbbf24) !important;
+            box-shadow: 0 0 16px rgba(251,191,36,0.7);
+        }
+        .key.led-yellow.black {
+            background: linear-gradient(to bottom, #f59e0b, #d97706) !important;
+            box-shadow: 0 0 16px rgba(245,158,11,0.7);
+        }
+        .key.led-purple.white {
+            background: linear-gradient(to bottom, #c4b5fd, #a78bfa) !important;
+            box-shadow: 0 0 16px rgba(167,139,250,0.7);
+        }
+        .key.led-purple.black {
+            background: linear-gradient(to bottom, #8b5cf6, #7c3aed) !important;
+            box-shadow: 0 0 16px rgba(139,92,246,0.7);
+        }
+
+        /* Difficulty selector */
+        .diff-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .diff-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 5px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .diff-btn:hover { background: rgba(255,255,255,0.1); }
+        .diff-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(251,191,36,0.08); }
+
+        /* Notification */
+        .notif {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-80px);
+            background: rgba(251,191,36,0.9);
+            color: #000;
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9em;
+            z-index: 100;
+            transition: transform 0.4s cubic-bezier(.17,.67,.41,1.2);
+            pointer-events: none;
+        }
+        .notif.show { transform: translateX(-50%) translateY(0); }
+        .notif.error { background: rgba(239,68,68,0.9); color: #fff; }
+        .notif.success { background: rgba(34,197,94,0.9); color: #fff; }
+
+        /* Audio Controls */
+        .audio-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .audio-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 5px 12px;
+            font-size: 0.8em;
+        }
+        .audio-ctrl label { color: #94a3b8; font-size: 0.85em; }
+        .audio-ctrl input[type="range"] {
+            width: 80px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        .mute-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.2s;
+        }
+        .mute-btn:hover { background: rgba(255,255,255,0.1); }
+        .mute-btn.muted { border-color: var(--danger); color: var(--danger); }
+
+        /* Controls Row */
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .ctrl-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82em;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+        .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .kbd {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            font-family: ui-monospace, monospace;
+            font-size: 0.72em;
+            color: #cbd5e1;
+        }
+        .shortcuts-help {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.72em;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .game-over-stats { text-align: center; color: #94a3b8; font-size: 0.95em; line-height: 1.8; }
+        .game-over-stats b { color: var(--accent); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <h1>Chord Detective</h1>
+        <div class="top-bar">
+            <span style="font-size:0.75em;color:#64748b;">Silent LED Chord Puzzle</span>
+        </div>
+    </div>
+
+    <!-- MIDI Bar -->
+    <div class="midi-bar">
+        <div>
+            <span class="status-dot" id="statusDot"></span>
+            <span id="midiStatusText">MIDI not connected</span>
+            <span style="color:#64748b;font-size:0.85em;margin-left:8px;" id="deviceName"></span>
+        </div>
+        <button class="midi-btn" onclick="connectMIDI()">Connect MIDI</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="statCases">0</div><div class="stat-label">Cases Solved</div></div>
+        <div class="stat-card"><div class="stat-val" id="statRank">Rookie</div><div class="stat-label">Rank</div></div>
+        <div class="stat-card"><div class="stat-val" id="statScore">0</div><div class="stat-label">Score</div></div>
+        <div class="stat-card"><div class="stat-val" id="statStreak">0</div><div class="stat-label">Streak</div></div>
+        <div class="stat-card"><div class="stat-val" id="statAccuracy">0%</div><div class="stat-label">Accuracy</div></div>
+    </div>
+
+    <!-- Difficulty -->
+    <div class="diff-row">
+        <button class="diff-btn active" onclick="setDifficulty('rookie')" id="diffRookie">Rookie</button>
+        <button class="diff-btn" onclick="setDifficulty('detective')" id="diffDetective">Detective</button>
+        <button class="diff-btn" onclick="setDifficulty('master')" id="diffMaster">Master</button>
+    </div>
+
+    <!-- Canvas -->
+    <div class="game-wrapper">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="450"></canvas>
+        <div class="game-overlay" id="overlay">
+            <div class="overlay-title">Chord Detective</div>
+            <div class="overlay-sub">Read the LEDs. Identify the chord. Crack the case.</div>
+            <button class="start-btn" onclick="startGame()">Open First Case</button>
+        </div>
+    </div>
+
+    <!-- Audio Controls -->
+    <div class="audio-row">
+        <div class="audio-ctrl"><label>BGM</label><input type="range" min="0" max="100" value="30" oninput="setBGMVol(this.value)"></div>
+        <div class="audio-ctrl"><label>SFX</label><input type="range" min="0" max="100" value="60" oninput="setSFXVol(this.value)"></div>
+        <div class="audio-ctrl"><label>Keys</label><input type="range" min="0" max="100" value="50" oninput="setKeysVol(this.value)"></div>
+        <button class="mute-btn" id="muteBtn" onclick="toggleMute()">Mute All</button>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-row">
+        <button class="ctrl-btn" onclick="nextCase()"><span class="kbd">Space</span> Next Case</button>
+        <button class="ctrl-btn" onclick="restartGame()"><span class="kbd">R</span> Restart</button>
+        <button class="ctrl-btn" onclick="skipCase()"><span class="kbd">Esc</span> Skip</button>
+    </div>
+    <div class="shortcuts-help">
+        <span class="kbd">Space</span> Next Case &nbsp;
+        <span class="kbd">R</span> Restart &nbsp;
+        <span class="kbd">Esc</span> Skip &nbsp;
+        <span class="kbd">1-4</span> Choose Answer
+    </div>
+
+    <!-- Virtual Keyboard -->
+    <div class="keyboard-section">
+        <div class="keyboard-label">PartyKeys 36-Key (C3-B5) -- LED Display</div>
+        <div class="keyboard" id="keyboard"></div>
+    </div>
+</div>
+
+<!-- Notification -->
+<div class="notif" id="notif"></div>
+
+<script>
+// =======================================
+// CONSTANTS
+// =======================================
+const PK_START = 48, PK_END = 83; // C3-B5
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const NOTE_DISPLAY = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+
+const CHORD_TYPES = {
+    'major': [0,4,7],
+    'minor': [0,3,7],
+    '7': [0,4,7,10],
+    'maj7': [0,4,7,11],
+    'min7': [0,3,7,10],
+    'dim': [0,3,6],
+    'aug': [0,4,8],
+    'sus4': [0,5,7],
+    'sus2': [0,2,7]
+};
+
+const CHORD_DISPLAY = {
+    'major': '', 'minor': 'm', '7': '7', 'maj7': 'maj7',
+    'min7': 'm7', 'dim': 'dim', 'aug': 'aug', 'sus4': 'sus4', 'sus2': 'sus2'
+};
+
+// Difficulty chord pools
+const DIFFICULTY_POOLS = {
+    rookie: {
+        roots: [0, 2, 4, 5, 7, 9], // C, D, E, F, G, A
+        types: ['major', 'minor'],
+        inversions: [0]
+    },
+    detective: {
+        roots: [0, 2, 4, 5, 7, 9, 11], // + B
+        types: ['major', 'minor', '7', 'maj7', 'min7'],
+        inversions: [0, 1]
+    },
+    master: {
+        roots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        types: ['major', 'minor', '7', 'maj7', 'min7', 'dim', 'aug', 'sus4', 'sus2'],
+        inversions: [0, 1, 2]
+    }
+};
+
+const RANKS = [
+    { name: 'Rookie', min: 0, badge: '#94a3b8' },
+    { name: 'Detective', min: 6, badge: '#60a5fa' },
+    { name: 'Inspector', min: 16, badge: '#a78bfa' },
+    { name: 'Chief', min: 31, badge: '#fbbf24' },
+    { name: 'Legend', min: 51, badge: '#f97316' }
+];
+
+// =======================================
+// GAME STATE
+// =======================================
+let game = {
+    phase: 'idle', // idle, silent, identify, confirm, solved, gameover
+    difficulty: 'rookie',
+    currentChord: null, // { root, type, inversion, midiNotes, name }
+    options: [],        // 4 chord name strings
+    correctIdx: -1,
+    attempts: 0,
+    caseNumber: 0,
+    casesSolved: 0,
+    score: 0,
+    streak: 0,
+    bestStreak: 0,
+    totalAttempts: 0,
+    totalCorrectFirst: 0,
+    caseStartTime: 0,
+    pressedMidi: new Set(),
+    selectedOption: -1,
+    particles: [],
+    solvedStamp: { active: false, scale: 0, alpha: 0 },
+    magnifier: { x: 530, y: 225, angle: 0, bobT: 0 },
+    caseAnim: { slideIn: 0 },
+    rainbowT: 0,
+    flashLeds: [],
+    stringConnections: []
+};
+
+let audioCtx = null, masterGain, bgmGain, sfxGain, keysGain;
+let midiAccess = null, midiOutput = null, midiInputConnected = false;
+let isMuted = false;
+let canvas, ctx;
+let bgmInterval = null;
+let lastFrame = 0;
+
+// =======================================
+// INITIALIZATION
+// =======================================
+window.addEventListener('DOMContentLoaded', () => {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    buildVirtualKeyboard();
+    generateStringConnections();
+    requestAnimationFrame(gameLoop);
+});
+
+function generateStringConnections() {
+    game.stringConnections = [];
+    for (let i = 0; i < 8; i++) {
+        game.stringConnections.push({
+            x1: 50 + Math.random() * 200, y1: 30 + Math.random() * 390,
+            x2: 810 + Math.random() * 200, y2: 30 + Math.random() * 390,
+            cp1x: 300 + Math.random() * 200, cp1y: Math.random() * 450,
+            cp2x: 560 + Math.random() * 200, cp2y: Math.random() * 450,
+        });
+    }
+}
+
+// =======================================
+// AUDIO ENGINE
+// =======================================
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain(); masterGain.gain.value = 1.0;
+    masterGain.connect(audioCtx.destination);
+
+    bgmGain = audioCtx.createGain(); bgmGain.gain.value = 0.3;
+    bgmGain.connect(masterGain);
+
+    sfxGain = audioCtx.createGain(); sfxGain.gain.value = 0.6;
+    sfxGain.connect(masterGain);
+
+    keysGain = audioCtx.createGain(); keysGain.gain.value = 0.5;
+    keysGain.connect(masterGain);
+}
+
+function setBGMVol(v) { if (bgmGain) bgmGain.gain.value = v / 100; }
+function setSFXVol(v) { if (sfxGain) sfxGain.gain.value = v / 100; }
+function setKeysVol(v) { if (keysGain) keysGain.gain.value = v / 100; }
+
+function toggleMute() {
+    isMuted = !isMuted;
+    if (masterGain) masterGain.gain.value = isMuted ? 0 : 1;
+    const btn = document.getElementById('muteBtn');
+    btn.textContent = isMuted ? 'Unmute' : 'Mute All';
+    btn.classList.toggle('muted', isMuted);
+}
+
+function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+// 5-partial piano synthesis with ADSR
+function playPianoNote(midiNote, velocity = 0.7) {
+    if (!audioCtx) return;
+    const freq = midiToFreq(midiNote);
+    const now = audioCtx.currentTime;
+    const dur = 1.5;
+    const vol = 0.08 * velocity;
+
+    const partials = [
+        { ratio: 1, amp: 1.0, type: 'sine' },
+        { ratio: 2, amp: 0.5, type: 'sine' },
+        { ratio: 3, amp: 0.2, type: 'sine' },
+        { ratio: 4, amp: 0.08, type: 'sine' },
+        { ratio: 5.04, amp: 0.03, type: 'sine' }
+    ];
+
+    partials.forEach(p => {
+        const osc = audioCtx.createOscillator();
+        osc.type = p.type;
+        osc.frequency.value = freq * p.ratio;
+
+        const g = audioCtx.createGain();
+        const a = vol * p.amp;
+        // ADSR: Attack 5ms, Decay 150ms to sustain 40%, Release
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(a, now + 0.005);
+        g.gain.exponentialRampToValueAtTime(a * 0.4, now + 0.15);
+        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        osc.connect(g);
+        g.connect(keysGain);
+        osc.start(now);
+        osc.stop(now + dur + 0.05);
+    });
+
+    // Slight detuned pair for richness
+    const detune = audioCtx.createOscillator();
+    detune.type = 'sine';
+    detune.frequency.value = freq * 1.001;
+    const dg = audioCtx.createGain();
+    dg.gain.setValueAtTime(0, now);
+    dg.gain.linearRampToValueAtTime(vol * 0.15, now + 0.005);
+    dg.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.7);
+    detune.connect(dg); dg.connect(keysGain);
+    detune.start(now); detune.stop(now + dur);
+}
+
+// SFX: case solved sparkle arpeggio
+function playSolvedSound() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const notes = [72, 76, 79, 84, 88, 91, 96]; // C5 major up
+    notes.forEach((m, i) => {
+        const t = now + i * 0.06;
+        const freq = midiToFreq(m);
+        const osc1 = audioCtx.createOscillator();
+        osc1.type = 'sine'; osc1.frequency.value = freq;
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine'; osc2.frequency.value = freq * 2;
+        const osc3 = audioCtx.createOscillator();
+        osc3.type = 'sine'; osc3.frequency.value = freq * 3;
+        const v = 0.1 * (1 - i * 0.01);
+        [osc1, osc2, osc3].forEach((o, j) => {
+            const g = audioCtx.createGain();
+            const amp = v * [1, 0.3, 0.1][j];
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(amp, t + 0.008);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            o.connect(g); g.connect(sfxGain);
+            o.start(t); o.stop(t + 0.55);
+        });
+    });
+}
+
+// SFX: wrong buzz
+function playWrongSound() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    [180, 227, 310].forEach(freq => {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq + (Math.random() - 0.5) * 30;
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.06, now + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass'; filter.frequency.value = 600;
+        osc.connect(filter); filter.connect(g); g.connect(sfxGain);
+        osc.start(now); osc.stop(now + 0.25);
+    });
+}
+
+// SFX: click
+function playClickSound() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = 800;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.08, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.connect(g); g.connect(sfxGain);
+    osc.start(now); osc.stop(now + 0.06);
+}
+
+// BGM: Noir jazz ambient loop
+function startBGM() {
+    if (bgmInterval) return;
+    if (!audioCtx) return;
+
+    let bassIdx = 0;
+    // Minor pentatonic bass: C, Eb, F, G, Bb
+    const bassNotes = [36, 39, 41, 43, 46, 43, 41, 39];
+    let padTimer = 0;
+
+    bgmInterval = setInterval(() => {
+        if (!audioCtx || isMuted) return;
+        const now = audioCtx.currentTime;
+
+        // Walking bass note
+        const bn = bassNotes[bassIdx % bassNotes.length];
+        bassIdx++;
+        const freq = midiToFreq(bn);
+        const osc = audioCtx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.12, now + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+        const filt = audioCtx.createBiquadFilter();
+        filt.type = 'lowpass'; filt.frequency.value = 300;
+        osc.connect(filt); filt.connect(g); g.connect(bgmGain);
+        osc.start(now); osc.stop(now + 0.8);
+
+        // Brushed cymbal (noise)
+        if (bassIdx % 2 === 0) {
+            const bufSize = audioCtx.sampleRate * 0.15;
+            const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * 0.02;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buf;
+            const ng = audioCtx.createGain();
+            ng.gain.setValueAtTime(0.6, now);
+            ng.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            const hp = audioCtx.createBiquadFilter();
+            hp.type = 'highpass'; hp.frequency.value = 6000;
+            noise.connect(hp); hp.connect(ng); ng.connect(bgmGain);
+            noise.start(now); noise.stop(now + 0.2);
+        }
+
+        // Occasional minor 7th pad
+        padTimer++;
+        if (padTimer % 16 === 0) {
+            const padNotes = [60, 63, 67, 70]; // Cm7 pad
+            padNotes.forEach(pn => {
+                const pf = midiToFreq(pn);
+                const po = audioCtx.createOscillator();
+                po.type = 'sine'; po.frequency.value = pf;
+                const pg = audioCtx.createGain();
+                pg.gain.setValueAtTime(0, now);
+                pg.gain.linearRampToValueAtTime(0.04, now + 0.3);
+                pg.gain.setValueAtTime(0.04, now + 1.5);
+                pg.gain.exponentialRampToValueAtTime(0.001, now + 3);
+                po.connect(pg); pg.connect(bgmGain);
+                po.start(now); po.stop(now + 3.1);
+            });
+        }
+    }, 600);
+}
+
+function stopBGM() {
+    if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
+}
+
+// =======================================
+// MIDI CONNECTION & LED
+// =======================================
+async function connectMIDI() {
+    if (!navigator.requestMIDIAccess) { notify('Web MIDI not supported. Use Chrome/Edge.', 'error'); return; }
+    try {
+        midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+        midiAccess.inputs.forEach(input => {
+            if (!midiInputConnected) {
+                input.onmidimessage = handleMIDIMessage;
+                midiInputConnected = true;
+                document.getElementById('deviceName').textContent = input.name;
+            }
+        });
+        midiAccess.outputs.forEach(output => { if (!midiOutput) midiOutput = output; });
+
+        if (midiInputConnected) {
+            document.getElementById('statusDot').classList.add('connected');
+            document.getElementById('midiStatusText').textContent = 'MIDI connected';
+            notify('MIDI connected! Ready to investigate.');
+        } else {
+            notify('No MIDI devices found.', 'error');
+        }
+
+        midiAccess.onstatechange = (e) => {
+            if (e.port.type === 'input' && e.port.state === 'connected' && !midiInputConnected) {
+                e.port.onmidimessage = handleMIDIMessage;
+                midiInputConnected = true;
+                document.getElementById('statusDot').classList.add('connected');
+                document.getElementById('midiStatusText').textContent = 'MIDI connected';
+                document.getElementById('deviceName').textContent = e.port.name;
+                notify('MIDI device connected: ' + e.port.name);
+            }
+            if (e.port.type === 'output' && e.port.state === 'connected' && !midiOutput) midiOutput = e.port;
+        };
+    } catch (err) { notify('MIDI access denied.', 'error'); console.error(err); }
+}
+
+function setLED(midiNote, color) {
+    if (!midiOutput) return;
+    const colorMap = { off: 0, red: 10, green: 30, blue: 50, yellow: 70, cyan: 90, purple: 110, white: 125 };
+    const vel = colorMap[color] || 0;
+    midiOutput.send(vel === 0 ? [0x80, midiNote, 0] : [0x90, midiNote, vel]);
+}
+
+function clearAllLEDs() {
+    if (!midiOutput) return;
+    for (let n = PK_START; n <= PK_END; n++) midiOutput.send([0x80, n, 0]);
+}
+
+function setChordLEDs(midiNotes, color) {
+    midiNotes.forEach(n => {
+        if (n >= PK_START && n <= PK_END) setLED(n, color);
+    });
+}
+
+// =======================================
+// VIRTUAL KEYBOARD
+// =======================================
+function buildVirtualKeyboard() {
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+    for (let midi = PK_START; midi <= PK_END; midi++) {
+        const noteIdx = midi % 12;
+        const isBlack = [1, 3, 6, 8, 10].includes(noteIdx);
+        const key = document.createElement('div');
+        key.className = `key ${isBlack ? 'black' : 'white'}`;
+        key.dataset.midi = midi;
+        const octave = Math.floor(midi / 12) - 1;
+        const label = NOTE_DISPLAY[noteIdx] + octave;
+        key.innerHTML = `<span class="key-label">${isBlack ? '' : label}</span>`;
+        key.addEventListener('mousedown', () => {
+            initAudio();
+            handleVirtualNoteOn(midi);
+        });
+        key.addEventListener('mouseup', () => handleVirtualNoteOff(midi));
+        key.addEventListener('mouseleave', () => handleVirtualNoteOff(midi));
+        kb.appendChild(key);
+    }
+}
+
+function handleVirtualNoteOn(midi) {
+    playPianoNote(midi);
+    setLED(midi, 'green');
+    const noteIdx = midi % 12;
+    game.pressedMidi.add(midi);
+    setVirtualKeyLed(midi, 'led-green');
+    checkPlayedChord();
+}
+
+function handleVirtualNoteOff(midi) {
+    game.pressedMidi.delete(midi);
+    clearVirtualKeyLed(midi);
+    // Restore blue LED if it's part of the chord and we're in a relevant phase
+    if (game.phase === 'silent' || game.phase === 'confirm') {
+        if (game.currentChord && game.currentChord.midiNotes.includes(midi)) {
+            setVirtualKeyLed(midi, 'led-blue');
+        }
+    }
+}
+
+function setVirtualKeyLed(midi, cls) {
+    const key = document.querySelector(`.key[data-midi="${midi}"]`);
+    if (key) {
+        key.classList.remove('led-blue', 'led-green', 'led-red', 'led-cyan', 'led-yellow', 'led-purple');
+        if (cls) key.classList.add(cls);
+    }
+}
+
+function clearVirtualKeyLed(midi) {
+    const key = document.querySelector(`.key[data-midi="${midi}"]`);
+    if (key) key.classList.remove('led-blue', 'led-green', 'led-red', 'led-cyan', 'led-yellow', 'led-purple');
+}
+
+function clearAllVirtualLEDs() {
+    document.querySelectorAll('.key').forEach(k => {
+        k.classList.remove('led-blue', 'led-green', 'led-red', 'led-cyan', 'led-yellow', 'led-purple');
+    });
+}
+
+function showChordOnVirtualKeys(midiNotes, color) {
+    midiNotes.forEach(n => setVirtualKeyLed(n, 'led-' + color));
+}
+
+// =======================================
+// MIDI MESSAGE HANDLER
+// =======================================
+function handleMIDIMessage(msg) {
+    const [status, note, velocity] = msg.data;
+    const cmd = status & 0xF0;
+    const noteOn = cmd === 0x90 && velocity > 0;
+    const noteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
+    if (!noteOn && !noteOff) return;
+
+    if (noteOn) {
+        initAudio();
+        game.pressedMidi.add(note);
+        playPianoNote(note, velocity / 127);
+        setVirtualKeyLed(note, 'led-green');
+        checkPlayedChord();
+    } else {
+        game.pressedMidi.delete(note);
+        clearVirtualKeyLed(note);
+        if (game.phase === 'silent' || game.phase === 'confirm') {
+            if (game.currentChord && game.currentChord.midiNotes.includes(note)) {
+                setVirtualKeyLed(note, 'led-blue');
+            }
+        }
+    }
+}
+
+// =======================================
+// CHORD GENERATION
+// =======================================
+function generateChord() {
+    const pool = DIFFICULTY_POOLS[game.difficulty];
+    const rootIdx = pool.roots[Math.floor(Math.random() * pool.roots.length)];
+    const type = pool.types[Math.floor(Math.random() * pool.types.length)];
+    const maxInv = Math.min(pool.inversions.length, CHORD_TYPES[type].length);
+    const inversion = pool.inversions[Math.floor(Math.random() * maxInv)];
+
+    let intervals = [...CHORD_TYPES[type]];
+
+    // Apply inversion: rotate intervals
+    for (let i = 0; i < inversion; i++) {
+        const first = intervals.shift();
+        intervals.push(first + 12);
+    }
+
+    // Pick a base octave that keeps all notes in range
+    const minOctBase = PK_START; // midi 48 = C3
+    const maxNoteInChord = Math.max(...intervals);
+    const maxBase = PK_END - maxNoteInChord;
+
+    // Try to center around middle of range
+    const idealBase = Math.floor((minOctBase + maxBase) / 2);
+    // Quantize to the root
+    let baseNote = idealBase - (idealBase % 12) + rootIdx;
+    if (baseNote < minOctBase) baseNote += 12;
+    if (baseNote + maxNoteInChord > PK_END) baseNote -= 12;
+
+    // Build MIDI notes
+    const midiNotes = intervals.map(i => baseNote + i).filter(n => n >= PK_START && n <= PK_END);
+
+    const rootName = NOTE_DISPLAY[rootIdx];
+    const suffix = CHORD_DISPLAY[type];
+    let name = rootName + suffix;
+    if (inversion > 0) {
+        const bassNoteIdx = (rootIdx + intervals[0]) % 12;
+        name += '/' + NOTE_DISPLAY[bassNoteIdx];
+    }
+
+    return { root: rootIdx, type, inversion, midiNotes, name, intervals, baseNote };
+}
+
+function generateDistractors(correctChord) {
+    const distractors = new Set();
+    distractors.add(correctChord.name);
+    const pool = DIFFICULTY_POOLS[game.difficulty];
+
+    let safety = 0;
+    while (distractors.size < 4 && safety < 100) {
+        safety++;
+        const ri = pool.roots[Math.floor(Math.random() * pool.roots.length)];
+        const tp = pool.types[Math.floor(Math.random() * pool.types.length)];
+        const rn = NOTE_DISPLAY[ri];
+        const sf = CHORD_DISPLAY[tp];
+        const name = rn + sf;
+        if (name !== correctChord.name) distractors.add(name);
+    }
+
+    // If we still need more, add random ones
+    const allRoots = NOTE_DISPLAY;
+    const allTypes = Object.keys(CHORD_DISPLAY);
+    while (distractors.size < 4) {
+        const rn = allRoots[Math.floor(Math.random() * 12)];
+        const tp = allTypes[Math.floor(Math.random() * allTypes.length)];
+        const name = rn + CHORD_DISPLAY[tp];
+        if (name !== correctChord.name) distractors.add(name);
+    }
+
+    const arr = Array.from(distractors);
+    // Shuffle
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, 4);
+}
+
+// =======================================
+// GAME FLOW
+// =======================================
+function startGame() {
+    initAudio();
+    startBGM();
+    document.getElementById('overlay').classList.add('hidden');
+    game.casesSolved = 0;
+    game.score = 0;
+    game.streak = 0;
+    game.bestStreak = 0;
+    game.totalAttempts = 0;
+    game.totalCorrectFirst = 0;
+    game.caseNumber = 0;
+    game.phase = 'starting';
+    updateStats();
+    nextCase();
+}
+
+function restartGame() {
+    clearAllLEDs();
+    clearAllVirtualLEDs();
+    stopBGM();
+    game.phase = 'idle';
+    game.particles = [];
+    document.getElementById('overlay').classList.remove('hidden');
+    document.querySelector('.overlay-title').textContent = 'Chord Detective';
+    document.querySelector('.overlay-sub').textContent = 'Read the LEDs. Identify the chord. Crack the case.';
+    document.querySelector('.start-btn').textContent = 'Open First Case';
+    document.querySelector('.start-btn').onclick = startGame;
+}
+
+function nextCase() {
+    if (game.phase === 'idle' && game.caseNumber === 0) return;
+    if (game.phase !== 'idle' && game.phase !== 'solved') {
+        // Start fresh case
+    }
+
+    clearAllLEDs();
+    clearAllVirtualLEDs();
+    game.pressedMidi.clear();
+    game.particles = [];
+    game.solvedStamp = { active: false, scale: 0, alpha: 0 };
+
+    game.caseNumber++;
+    game.attempts = 0;
+    game.selectedOption = -1;
+
+    const chord = generateChord();
+    game.currentChord = chord;
+    game.options = generateDistractors(chord);
+    game.correctIdx = game.options.indexOf(chord.name);
+
+    // Enter silent phase
+    game.phase = 'silent';
+    game.caseStartTime = performance.now();
+    game.caseAnim = { slideIn: 0 };
+    game.magnifier = { x: 530, y: 200, angle: 0, bobT: 0 };
+
+    // Light LEDs (the puzzle!)
+    setChordLEDs(chord.midiNotes, 'blue');
+    showChordOnVirtualKeys(chord.midiNotes, 'blue');
+}
+
+function skipCase() {
+    if (game.phase === 'idle') return;
+    notify('Case skipped.', 'error');
+    nextCase();
+}
+
+function selectOption(idx) {
+    if (game.phase !== 'identify') return;
+    initAudio();
+    playClickSound();
+    game.selectedOption = idx;
+    game.attempts++;
+    game.totalAttempts++;
+
+    if (game.options[idx] === game.currentChord.name) {
+        // Correct identification! Move to confirm phase
+        game.phase = 'confirm';
+        notify('Correct! Now play the chord to confirm.', 'success');
+        // Keep blue LEDs on
+    } else {
+        // Wrong!
+        playWrongSound();
+        flashAllLEDs('red', 300);
+        notify('Wrong! Try again.', 'error');
+        game.selectedOption = -1;
+        // Stay in identify phase
+    }
+}
+
+function checkPlayedChord() {
+    if (game.phase !== 'confirm') return;
+    if (!game.currentChord) return;
+
+    const target = new Set(game.currentChord.midiNotes);
+    const pressed = game.pressedMidi;
+
+    // Check if wrong notes
+    pressed.forEach(n => {
+        if (!target.has(n) && n >= PK_START && n <= PK_END) {
+            setVirtualKeyLed(n, 'led-red');
+            setLED(n, 'red');
+            setTimeout(() => {
+                if (game.pressedMidi.has(n)) return;
+                clearVirtualKeyLed(n);
+                setLED(n, 'off');
+            }, 300);
+        }
+    });
+
+    // Check if all target notes are pressed
+    let allCorrect = true;
+    target.forEach(n => {
+        if (!pressed.has(n)) allCorrect = false;
+    });
+
+    if (allCorrect) {
+        caseSolved();
+    }
+}
+
+function caseSolved() {
+    game.phase = 'solved';
+    game.casesSolved++;
+
+    // Score calculation
+    const elapsed = (performance.now() - game.caseStartTime) / 1000;
+    let points = game.attempts <= 1 ? 100 : (game.attempts === 2 ? 60 : 30);
+    if (elapsed < 5) points += 50;
+    if (game.attempts <= 1) {
+        game.streak++;
+        game.totalCorrectFirst++;
+    } else {
+        game.streak = 0;
+    }
+    if (game.streak >= 3) points = Math.floor(points * 1.5);
+    game.bestStreak = Math.max(game.bestStreak, game.streak);
+    game.score += points;
+
+    // Visual feedback
+    game.solvedStamp = { active: true, scale: 3, alpha: 0 };
+    playSolvedSound();
+
+    // LED celebration
+    clearAllLEDs();
+    clearAllVirtualLEDs();
+    showChordOnVirtualKeys(game.currentChord.midiNotes, 'green');
+    setChordLEDs(game.currentChord.midiNotes, 'green');
+
+    setTimeout(() => {
+        cyanCascade();
+    }, 400);
+
+    // Check rank up
+    const oldRank = getRank(game.casesSolved - 1);
+    const newRank = getRank(game.casesSolved);
+    if (newRank.name !== oldRank.name) {
+        setTimeout(() => {
+            notify('Rank Up: ' + newRank.name + '!', 'success');
+            rainbowCascade();
+        }, 800);
+    }
+
+    // Particles
+    for (let i = 0; i < 30; i++) {
+        game.particles.push({
+            x: 530, y: 225,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8 - 2,
+            life: 1,
+            color: ['#fbbf24', '#f97316', '#34d399', '#60a5fa', '#a78bfa'][Math.floor(Math.random() * 5)],
+            size: 2 + Math.random() * 4
+        });
+    }
+
+    updateStats();
+}
+
+function flashAllLEDs(color, duration) {
+    for (let n = PK_START; n <= PK_END; n++) {
+        setLED(n, color);
+        setVirtualKeyLed(n, 'led-' + color);
+    }
+    setTimeout(() => {
+        clearAllLEDs();
+        clearAllVirtualLEDs();
+        if (game.currentChord && (game.phase === 'silent' || game.phase === 'identify' || game.phase === 'confirm')) {
+            setChordLEDs(game.currentChord.midiNotes, 'blue');
+            showChordOnVirtualKeys(game.currentChord.midiNotes, 'blue');
+        }
+    }, duration);
+}
+
+function cyanCascade() {
+    let i = 0;
+    const cascade = setInterval(() => {
+        const midi = PK_START + i;
+        if (midi > PK_END) { clearInterval(cascade); return; }
+        setLED(midi, 'cyan');
+        setVirtualKeyLed(midi, 'led-cyan');
+        setTimeout(() => {
+            setLED(midi, 'off');
+            clearVirtualKeyLed(midi);
+        }, 200);
+        i++;
+    }, 25);
+}
+
+function rainbowCascade() {
+    const colors = ['red', 'yellow', 'green', 'cyan', 'blue', 'purple'];
+    let i = 0;
+    const cascade = setInterval(() => {
+        const midi = PK_START + i;
+        if (midi > PK_END) { clearInterval(cascade); return; }
+        const color = colors[i % colors.length];
+        setLED(midi, color);
+        setVirtualKeyLed(midi, 'led-' + color);
+        setTimeout(() => {
+            setLED(midi, 'off');
+            clearVirtualKeyLed(midi);
+        }, 350);
+        i++;
+    }, 30);
+}
+
+function getRank(solved) {
+    let rank = RANKS[0];
+    for (const r of RANKS) {
+        if (solved >= r.min) rank = r;
+    }
+    return rank;
+}
+
+function updateStats() {
+    document.getElementById('statCases').textContent = game.casesSolved;
+    document.getElementById('statRank').textContent = getRank(game.casesSolved).name;
+    document.getElementById('statScore').textContent = game.score;
+    document.getElementById('statStreak').textContent = game.streak;
+    const acc = game.totalAttempts > 0 ? Math.round(game.totalCorrectFirst / game.caseNumber * 100) : 0;
+    document.getElementById('statAccuracy').textContent = acc + '%';
+}
+
+function setDifficulty(d) {
+    game.difficulty = d;
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('diff' + d.charAt(0).toUpperCase() + d.slice(1)).classList.add('active');
+    if (game.phase !== 'idle') {
+        nextCase();
+    }
+}
+
+// =======================================
+// KEYBOARD SHORTCUTS
+// =======================================
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); nextCase(); }
+    if (e.code === 'KeyR') { restartGame(); }
+    if (e.code === 'Escape') { skipCase(); }
+    if (e.key >= '1' && e.key <= '4') {
+        const idx = parseInt(e.key) - 1;
+        if (game.phase === 'identify') selectOption(idx);
+        if (game.phase === 'silent') {
+            // Transition to identify on keypress
+            game.phase = 'identify';
+            selectOption(idx);
+        }
+    }
+});
+
+// =======================================
+// CANVAS CLICK HANDLER (for option buttons)
+// =======================================
+canvas = document.getElementById('gameCanvas');
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = 1060 / rect.width;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * (450 / rect.height);
+
+    // Handle "Examine Complete" button in silent phase
+    if (game.phase === 'silent') {
+        if (mx >= 430 && mx <= 630 && my >= 360 && my <= 400) {
+            initAudio();
+            playClickSound();
+            game.phase = 'identify';
+            return;
+        }
+    }
+
+    // Handle option buttons in identify phase
+    if (game.phase === 'identify') {
+        for (let i = 0; i < 4; i++) {
+            const bx = 330 + (i % 2) * 210;
+            const by = 170 + Math.floor(i / 2) * 65;
+            if (mx >= bx && mx <= bx + 190 && my >= by && my <= by + 50) {
+                selectOption(i);
+                return;
+            }
+        }
+    }
+
+    // Handle "Next Case" button in solved phase
+    if (game.phase === 'solved') {
+        if (mx >= 430 && mx <= 630 && my >= 370 && my <= 410) {
+            nextCase();
+            return;
+        }
+    }
+});
+
+// =======================================
+// NOTIFICATION
+// =======================================
+function notify(msg, type = '') {
+    const el = document.getElementById('notif');
+    el.textContent = msg;
+    el.className = 'notif show' + (type ? ' ' + type : '');
+    setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// =======================================
+// RENDER / GAME LOOP
+// =======================================
+function gameLoop(ts) {
+    const dt = Math.min((ts - (lastFrame || ts)) / 1000, 0.05);
+    lastFrame = ts;
+
+    ctx.clearRect(0, 0, 1060, 450);
+    drawBackground(dt);
+
+    if (game.phase === 'silent') drawSilentPhase(dt);
+    else if (game.phase === 'identify') drawIdentifyPhase(dt);
+    else if (game.phase === 'confirm') drawConfirmPhase(dt);
+    else if (game.phase === 'solved') drawSolvedPhase(dt);
+    else drawIdleCanvas();
+
+    drawParticles(dt);
+    drawRankBadge();
+
+    requestAnimationFrame(gameLoop);
+}
+
+function drawBackground(dt) {
+    // Dark noir gradient
+    const grad = ctx.createLinearGradient(0, 0, 1060, 450);
+    grad.addColorStop(0, '#0a0a1a');
+    grad.addColorStop(0.5, '#120a20');
+    grad.addColorStop(1, '#0a0a1a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1060, 450);
+
+    // Evidence board strings
+    ctx.strokeStyle = 'rgba(251,191,36,0.06)';
+    ctx.lineWidth = 1;
+    game.stringConnections.forEach(s => {
+        ctx.beginPath();
+        ctx.moveTo(s.x1, s.y1);
+        ctx.bezierCurveTo(s.cp1x, s.cp1y, s.cp2x, s.cp2y, s.x2, s.y2);
+        ctx.stroke();
+    });
+
+    // Pin dots
+    game.stringConnections.forEach(s => {
+        [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }].forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(251,191,36,0.15)';
+            ctx.fill();
+        });
+    });
+
+    // Spotlight effect
+    const spotGrad = ctx.createRadialGradient(530, 200, 0, 530, 200, 350);
+    spotGrad.addColorStop(0, 'rgba(251,191,36,0.04)');
+    spotGrad.addColorStop(0.5, 'rgba(251,191,36,0.01)');
+    spotGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = spotGrad;
+    ctx.fillRect(0, 0, 1060, 450);
+
+    // Vignette
+    const vig = ctx.createRadialGradient(530, 225, 200, 530, 225, 550);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.4)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, 1060, 450);
+}
+
+function drawCaseCard(x, y, w, h, slideIn) {
+    const si = Math.min(slideIn, 1);
+    const ox = (1 - si) * 50;
+    const alpha = si;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(ox, 0);
+
+    // Card shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    roundRect(ctx, x + 4, y + 4, w, h, 12);
+    ctx.fill();
+
+    // Card body
+    ctx.fillStyle = 'rgba(20,15,30,0.92)';
+    ctx.strokeStyle = 'rgba(251,191,36,0.3)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    // Card header bar
+    const hGrad = ctx.createLinearGradient(x, y, x + w, y);
+    hGrad.addColorStop(0, 'rgba(251,191,36,0.15)');
+    hGrad.addColorStop(1, 'rgba(249,115,22,0.08)');
+    ctx.fillStyle = hGrad;
+    roundRect(ctx, x, y, w, 40, 12, true);
+    ctx.fill();
+
+    ctx.restore();
+    return { ox, alpha: si };
+}
+
+function roundRect(c, x, y, w, h, r, topOnly) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.lineTo(x + w - r, y);
+    c.arcTo(x + w, y, x + w, y + r, r);
+    if (topOnly) {
+        c.lineTo(x + w, y + h);
+        c.lineTo(x, y + h);
+    } else {
+        c.lineTo(x + w, y + h - r);
+        c.arcTo(x + w, y + h, x + w - r, y + h, r);
+        c.lineTo(x + r, y + h);
+        c.arcTo(x, y + h, x, y + h - r, r);
+    }
+    c.lineTo(x, y + r);
+    c.arcTo(x, y, x + r, y, r);
+    c.closePath();
+}
+
+function drawDifficultyBadge(x, y) {
+    const labels = { rookie: 'ROOKIE', detective: 'DETECTIVE', master: 'MASTER' };
+    const colors = { rookie: '#34d399', detective: '#60a5fa', master: '#f97316' };
+    const label = labels[game.difficulty];
+    const color = colors[game.difficulty];
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.2;
+    roundRect(ctx, x, y, ctx.measureText(label).width + 20, 22, 6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.font = 'bold 11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x + ctx.measureText(label).width / 2 + 10, y + 15);
+}
+
+// ---- SILENT PHASE ----
+function drawSilentPhase(dt) {
+    game.caseAnim.slideIn = Math.min(game.caseAnim.slideIn + dt * 4, 1);
+    game.magnifier.bobT += dt;
+
+    const cardX = 280, cardY = 40, cardW = 500, cardH = 370;
+    const { ox, alpha } = drawCaseCard(cardX, cardY, cardW, cardH, game.caseAnim.slideIn);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(ox, 0);
+
+    // Case number
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'left';
+    ctx.fillText('CASE #' + String(game.caseNumber).padStart(3, '0'), cardX + 20, cardY + 26);
+
+    // Difficulty badge
+    drawDifficultyBadge(cardX + cardW - 120, cardY + 9);
+
+    // Magnifying glass icon
+    const mx = 530 + Math.sin(game.magnifier.bobT * 1.5) * 15;
+    const my = 140 + Math.cos(game.magnifier.bobT * 2) * 8;
+    drawMagnifyingGlass(mx, my, 35 + Math.sin(game.magnifier.bobT * 3) * 2);
+
+    // Instruction text
+    ctx.font = '20px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#e0e0e0';
+    ctx.textAlign = 'center';
+    ctx.fillText('Examine the keyboard LEDs', 530, 230);
+
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('A chord is shown on your keyboard in BLUE', 530, 255);
+    ctx.fillText('Study the pattern, then identify the chord', 530, 275);
+
+    // Note count hint
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#60a5fa';
+    ctx.fillText(game.currentChord.midiNotes.length + ' notes lit', 530, 310);
+
+    // "Ready to identify" button
+    ctx.fillStyle = 'rgba(251,191,36,0.15)';
+    roundRect(ctx, 430, 360, 200, 40, 10);
+    ctx.fill();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 430, 360, 200, 40, 10);
+    ctx.stroke();
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'center';
+    ctx.fillText('Ready to Identify', 530, 385);
+
+    ctx.restore();
+}
+
+function drawMagnifyingGlass(x, y, size) {
+    ctx.save();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.7;
+    // Lens
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.stroke();
+    // Glass fill
+    ctx.fillStyle = 'rgba(251,191,36,0.05)';
+    ctx.fill();
+    // Handle
+    const hx = x + size * 0.7;
+    const hy = y + size * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx + size * 0.6, hy + size * 0.6);
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    // Gleam
+    ctx.beginPath();
+    ctx.arc(x - size * 0.3, y - size * 0.3, size * 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(251,191,36,0.2)';
+    ctx.fill();
+    ctx.restore();
+}
+
+// ---- IDENTIFY PHASE ----
+function drawIdentifyPhase(dt) {
+    const cardX = 280, cardY = 40, cardW = 500, cardH = 370;
+    const { ox, alpha } = drawCaseCard(cardX, cardY, cardW, cardH, 1);
+
+    ctx.save();
+
+    // Case number
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'left';
+    ctx.fillText('CASE #' + String(game.caseNumber).padStart(3, '0'), cardX + 20, cardY + 26);
+
+    drawDifficultyBadge(cardX + cardW - 120, cardY + 9);
+
+    // Question
+    ctx.font = 'bold 22px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#e0e0e0';
+    ctx.textAlign = 'center';
+    ctx.fillText('What chord is this?', 530, 100);
+
+    ctx.font = '13px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Select the correct chord name', 530, 125);
+
+    if (game.attempts > 0) {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = '12px "Segoe UI", sans-serif';
+        ctx.fillText('Attempts: ' + game.attempts, 530, 145);
+    }
+
+    // 4 option buttons (2x2 grid)
+    for (let i = 0; i < 4; i++) {
+        const bx = 330 + (i % 2) * 210;
+        const by = 170 + Math.floor(i / 2) * 65;
+        const isHover = false;
+
+        ctx.fillStyle = game.selectedOption === i
+            ? (game.options[i] === game.currentChord.name ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)')
+            : 'rgba(255,255,255,0.06)';
+        roundRect(ctx, bx, by, 190, 50, 10);
+        ctx.fill();
+
+        ctx.strokeStyle = game.selectedOption === i
+            ? (game.options[i] === game.currentChord.name ? '#34d399' : '#ff6b6b')
+            : 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, bx, by, 190, 50, 10);
+        ctx.stroke();
+
+        // Number badge
+        ctx.fillStyle = 'rgba(251,191,36,0.3)';
+        ctx.beginPath();
+        ctx.arc(bx + 20, by + 25, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 12px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#fbbf24';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(i + 1), bx + 20, by + 29);
+
+        // Chord name
+        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillText(game.options[i], bx + 110, by + 31);
+    }
+
+    // Hint at bottom
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press 1-4 or click to select', 530, 380);
+
+    ctx.restore();
+}
+
+// ---- CONFIRM PHASE ----
+function drawConfirmPhase(dt) {
+    const cardX = 280, cardY = 40, cardW = 500, cardH = 370;
+    drawCaseCard(cardX, cardY, cardW, cardH, 1);
+
+    ctx.save();
+
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'left';
+    ctx.fillText('CASE #' + String(game.caseNumber).padStart(3, '0'), cardX + 20, cardY + 26);
+
+    drawDifficultyBadge(cardX + cardW - 120, cardY + 9);
+
+    // Identified chord
+    ctx.font = 'bold 32px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#34d399';
+    ctx.textAlign = 'center';
+    ctx.fillText(game.currentChord.name, 530, 130);
+
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Identification correct!', 530, 155);
+
+    // Piano icon
+    drawPianoIcon(480, 185, 100, 40);
+
+    // Instruction
+    ctx.font = 'bold 20px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#e0e0e0';
+    ctx.textAlign = 'center';
+    ctx.fillText('Play the chord to confirm', 530, 265);
+
+    ctx.font = '13px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#60a5fa';
+    ctx.fillText('Press all ' + game.currentChord.midiNotes.length + ' blue notes simultaneously', 530, 290);
+
+    // Show which notes are currently pressed
+    const target = game.currentChord.midiNotes;
+    const pressed = game.pressedMidi;
+    let matched = 0;
+    target.forEach(n => { if (pressed.has(n)) matched++; });
+
+    // Progress dots
+    const dotY = 320;
+    const dotSpacing = 24;
+    const startX = 530 - ((target.length - 1) * dotSpacing) / 2;
+    target.forEach((n, i) => {
+        const dx = startX + i * dotSpacing;
+        ctx.beginPath();
+        ctx.arc(dx, dotY, 8, 0, Math.PI * 2);
+        if (pressed.has(n)) {
+            ctx.fillStyle = '#34d399';
+        } else {
+            ctx.fillStyle = 'rgba(96,165,250,0.3)';
+        }
+        ctx.fill();
+        ctx.strokeStyle = pressed.has(n) ? '#34d399' : '#60a5fa';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    });
+
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(matched + ' / ' + target.length + ' notes held', 530, 355);
+
+    ctx.restore();
+}
+
+function drawPianoIcon(x, y, w, h) {
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    const nWhite = 7;
+    const kw = w / nWhite;
+    for (let i = 0; i < nWhite; i++) {
+        ctx.fillStyle = '#ddd';
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.fillRect(x + i * kw, y, kw - 1, h);
+        ctx.strokeRect(x + i * kw, y, kw - 1, h);
+    }
+    const blackPos = [0.7, 1.7, 3.7, 4.7, 5.7];
+    blackPos.forEach(p => {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(x + p * kw - kw * 0.3, y, kw * 0.6, h * 0.6);
+    });
+    ctx.restore();
+}
+
+// ---- SOLVED PHASE ----
+function drawSolvedPhase(dt) {
+    const cardX = 280, cardY = 40, cardW = 500, cardH = 370;
+    drawCaseCard(cardX, cardY, cardW, cardH, 1);
+
+    ctx.save();
+
+    ctx.font = 'bold 16px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'left';
+    ctx.fillText('CASE #' + String(game.caseNumber).padStart(3, '0'), cardX + 20, cardY + 26);
+
+    // Chord name
+    ctx.font = 'bold 28px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#34d399';
+    ctx.textAlign = 'center';
+    ctx.fillText(game.currentChord.name, 530, 100);
+
+    // SOLVED stamp animation
+    if (game.solvedStamp.active) {
+        game.solvedStamp.scale = Math.max(game.solvedStamp.scale - dt * 8, 1);
+        game.solvedStamp.alpha = Math.min(game.solvedStamp.alpha + dt * 4, 0.85);
+
+        ctx.save();
+        ctx.translate(530, 200);
+        ctx.scale(game.solvedStamp.scale, game.solvedStamp.scale);
+        ctx.rotate(-0.15);
+        ctx.globalAlpha = game.solvedStamp.alpha;
+
+        // Stamp border
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 4;
+        roundRect(ctx, -90, -35, 180, 70, 8);
+        ctx.stroke();
+
+        // SOLVED text
+        ctx.font = 'bold 36px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#34d399';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('SOLVED', 0, 0);
+
+        ctx.restore();
+    }
+
+    // Score earned
+    const elapsed = (game.caseStartTime ? (performance.now() - game.caseStartTime) / 1000 : 99).toFixed(1);
+    ctx.font = '14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time: ' + elapsed + 's  |  Attempts: ' + game.attempts, 530, 290);
+
+    let pts = game.attempts <= 1 ? 100 : (game.attempts === 2 ? 60 : 30);
+    if (parseFloat(elapsed) < 5) pts += 50;
+    if (game.streak >= 3) pts = Math.floor(pts * 1.5);
+    ctx.font = 'bold 18px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText('+' + pts + ' points', 530, 320);
+
+    if (game.streak >= 3) {
+        ctx.font = 'bold 13px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#f97316';
+        ctx.fillText('STREAK x1.5 BONUS!', 530, 345);
+    }
+
+    // Next case button
+    ctx.fillStyle = 'rgba(251,191,36,0.15)';
+    roundRect(ctx, 430, 370, 200, 40, 10);
+    ctx.fill();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 430, 370, 200, 40, 10);
+    ctx.stroke();
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'center';
+    ctx.fillText('Next Case (Space)', 530, 395);
+
+    ctx.restore();
+}
+
+function drawIdleCanvas() {
+    ctx.font = '16px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press "Open First Case" to begin', 530, 230);
+}
+
+// ---- PARTICLES ----
+function drawParticles(dt) {
+    game.particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 5 * dt;
+        p.life -= dt * 0.8;
+    });
+    game.particles = game.particles.filter(p => p.life > 0);
+
+    game.particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+// ---- RANK BADGE ----
+function drawRankBadge() {
+    const rank = getRank(game.casesSolved);
+    const x = 30, y = 20;
+
+    // Badge background
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    roundRect(ctx, x, y, 130, 55, 10);
+    ctx.fill();
+    ctx.strokeStyle = rank.badge;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.6;
+    roundRect(ctx, x, y, 130, 55, 10);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Star
+    ctx.fillStyle = rank.badge;
+    drawStar(x + 25, y + 28, 12, 6, 5);
+
+    // Rank name
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.fillStyle = rank.badge;
+    ctx.textAlign = 'left';
+    ctx.fillText(rank.name, x + 42, y + 25);
+
+    // Cases count
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(game.casesSolved + ' cases', x + 42, y + 43);
+
+    ctx.restore();
+}
+
+function drawStar(cx, cy, outerR, innerR, points) {
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = (Math.PI * i) / points - Math.PI / 2;
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+}
+
+// =======================================
+// START
+// =======================================
+</script>
+</body>
+</html>

@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chord Duel - MIDI Boss Battle</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg1:#0a0a1a;--bg2:#0d1b2a;--accent:#00f5d4;--danger:#ff6b6b;--text:#e0e0e0;--card-bg:rgba(255,255,255,0.05);--boss:#ff4444;--heal:#44ff88;--gold:#ffd700}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,var(--bg1),var(--bg2));min-height:100vh;color:var(--text);overflow-x:hidden}
+.container{max-width:1100px;margin:0 auto;padding:10px 15px}
+.header{text-align:center;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.header h1{font-size:1.6em;background:linear-gradient(135deg,var(--accent),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.top-bar{display:flex;align-items:center;gap:10px}
+.diff-btn{background:var(--card-bg);border:1px solid rgba(255,255,255,0.15);color:var(--text);padding:5px 10px;border-radius:8px;cursor:pointer;font-size:0.8em;transition:all .2s}
+.diff-btn:hover{background:rgba(255,255,255,0.12)}
+.diff-btn.active{border-color:var(--accent);color:var(--accent)}
+.midi-bar{background:var(--card-bg);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.85em}
+.status-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;margin-right:6px;animation:pulse 2s infinite}
+.status-dot.connected{background:#10b981}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.midi-btn{background:linear-gradient(135deg,var(--accent),#a78bfa);border:none;color:#000;font-weight:700;padding:6px 16px;border-radius:8px;cursor:pointer;font-size:0.85em;transition:transform .15s}
+.midi-btn:hover{transform:scale(1.05)}
+.stats-row{display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:80px;background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 12px;text-align:center}
+.stat-val{font-size:1.3em;font-weight:700;color:var(--accent)}
+.stat-val.danger{color:var(--danger)}
+.stat-val.boss-color{color:var(--boss)}
+.stat-label{font-size:0.65em;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
+.game-wrapper{position:relative;border-radius:12px;overflow:hidden;border:2px solid rgba(255,255,255,0.1);margin-bottom:8px}
+.game-canvas{display:block;width:100%;background:#000}
+.game-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);z-index:10;flex-direction:column;gap:16px}
+.game-overlay.hidden{display:none}
+.overlay-title{font-size:2.2em;font-weight:800;background:linear-gradient(135deg,var(--accent),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.overlay-sub{font-size:1em;color:#94a3b8;max-width:500px;text-align:center;line-height:1.5}
+.start-btn{background:linear-gradient(135deg,var(--accent),#a78bfa);border:none;color:#000;font-weight:700;padding:12px 36px;border-radius:12px;font-size:1.1em;cursor:pointer;transition:transform .2s;margin:4px}
+.start-btn:hover{transform:scale(1.08)}
+.start-btn.boss-btn{font-size:0.9em;padding:10px 24px;background:linear-gradient(135deg,#ff4444,#ff8844)}
+.start-btn.boss-btn:hover{transform:scale(1.06)}
+.start-btn.boss-btn.locked{opacity:0.35;cursor:not-allowed;transform:none}
+.boss-grid{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:10px 0}
+.audio-controls{background:var(--card-bg);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 16px;margin-bottom:8px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:0.8em}
+.vol-group{display:flex;align-items:center;gap:6px}
+.vol-group input[type=range]{width:70px;accent-color:var(--accent)}
+.mute-btn{background:var(--card-bg);border:1px solid rgba(255,255,255,0.15);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.85em}
+.mute-btn.muted{color:var(--danger);border-color:var(--danger)}
+.keyboard-row{display:flex;justify-content:center;gap:2px;padding:6px;background:var(--card-bg);border-radius:10px;border:1px solid rgba(255,255,255,0.08);flex-wrap:wrap}
+.key-led{width:22px;height:36px;border-radius:4px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.1);transition:background .1s}
+.key-led.black{background:#0a0a1a;height:28px;width:16px;margin:0 -4px;z-index:2;border-color:rgba(255,255,255,0.15)}
+.key-led.active{box-shadow:0 0 10px currentColor}
+.relic-row{display:flex;gap:8px;justify-content:center;margin:6px 0;flex-wrap:wrap}
+.relic{background:var(--card-bg);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:4px 10px;font-size:0.75em;color:var(--gold);opacity:0.3}
+.relic.earned{opacity:1;border-color:var(--gold);box-shadow:0 0 8px rgba(255,215,0,0.3)}
+.phase-indicator{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:5;font-size:1.2em;font-weight:700;padding:4px 18px;border-radius:20px;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);pointer-events:none;transition:all .3s}
+.shortcuts{text-align:center;font-size:0.7em;color:#555;margin-top:6px}
+.shortcuts span{margin:0 8px}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Chord Duel</h1>
+        <div class="top-bar">
+            <button class="diff-btn active" data-diff="easy">Easy</button>
+            <button class="diff-btn" data-diff="medium">Medium</button>
+            <button class="diff-btn" data-diff="hard">Hard</button>
+            <label style="font-size:0.8em;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="practiceMode"> Practice</label>
+        </div>
+    </div>
+    <div class="midi-bar">
+        <div><span class="status-dot" id="statusDot"></span><span id="midiStatus">No MIDI connected</span></div>
+        <button class="midi-btn" id="connectBtn">Connect MIDI</button>
+    </div>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="playerHPVal">100</div><div class="stat-label">Player HP</div></div>
+        <div class="stat-card"><div class="stat-val boss-color" id="bossHPVal">--</div><div class="stat-label">Boss HP</div></div>
+        <div class="stat-card"><div class="stat-val" id="relicsVal">0/5</div><div class="stat-label">Relics</div></div>
+        <div class="stat-card"><div class="stat-val" id="bossNameVal">--</div><div class="stat-label">Boss</div></div>
+        <div class="stat-card"><div class="stat-val" id="phaseVal">--</div><div class="stat-label">Phase</div></div>
+    </div>
+    <div class="audio-controls">
+        <div class="vol-group"><label>BGM</label><input type="range" id="bgmVol" min="0" max="100" value="40"></div>
+        <div class="vol-group"><label>SFX</label><input type="range" id="sfxVol" min="0" max="100" value="60"></div>
+        <div class="vol-group"><label>Keys</label><input type="range" id="keysVol" min="0" max="100" value="50"></div>
+        <button class="mute-btn" id="muteBtn">Mute All</button>
+    </div>
+    <div class="game-wrapper">
+        <canvas class="game-canvas" id="gameCanvas" width="1060" height="500"></canvas>
+        <div class="phase-indicator" id="phaseIndicator" style="display:none"></div>
+        <div class="game-overlay" id="overlay">
+            <div class="overlay-title">Chord Duel</div>
+            <div class="overlay-sub">Turn-based boss battles with your MIDI keyboard. Play chords to attack and echo intervals to defend!</div>
+            <div class="boss-grid" id="bossGrid"></div>
+            <div class="overlay-sub" style="font-size:0.8em">Connect MIDI keyboard or use computer keys (A-J = C3-B3, K-' = C4-E4)</div>
+        </div>
+    </div>
+    <div class="relic-row" id="relicRow"></div>
+    <div class="keyboard-row" id="keyboardRow"></div>
+    <div class="shortcuts"><span>Space = Pause</span><span>R = Restart</span><span>Esc = Quit</span></div>
+</div>
+
+<script>
+// ─── CONSTANTS ───
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const MIDI_MIN = 48, MIDI_MAX = 83;
+const LED_COLORS = {off:0,red:10,green:30,blue:50,yellow:70,cyan:90,purple:110,white:125};
+
+const CHORD_TYPES = {
+    'major':[0,4,7],'minor':[0,3,7],'7':[0,4,7,10],'maj7':[0,4,7,11],
+    'min7':[0,3,7,10],'dim':[0,3,6],'aug':[0,4,8],'sus4':[0,5,7],'sus2':[0,2,7]
+};
+
+const BOSSES = [
+    {name:'Diminished Demon',weakness:'dim',hp:80,dmg:[10,15],color:'#ff3333',
+     intervals:[[0,1]],desc:'Weak to diminished chords',
+     relicName:'Demon Core',relicDesc:'+10% damage'},
+    {name:'Augmented Asp',weakness:'aug',hp:100,dmg:[12,18],color:'#44cc44',
+     intervals:[[0,6]],desc:'Weak to augmented chords',
+     relicName:'Serpent Scale',relicDesc:'+15 max HP'},
+    {name:'Sus2 Siren',weakness:'sus2',hp:120,dmg:[14,20],color:'#4488ff',
+     intervals:[[0,5]],desc:'Weak to sus2 chords',
+     relicName:'Siren Song',relicDesc:'Heal 5 HP/turn'},
+    {name:'Seventh Samurai',weakness:'7',hp:150,dmg:[16,22],color:'#ff8800',
+     intervals:[[0,11]],desc:'Weak to 7th chords',
+     relicName:'Samurai Blade',relicDesc:'+20% damage'},
+    {name:'Maj7 Monarch',weakness:'maj7',hp:200,dmg:[18,25],color:'#cc44ff',
+     intervals:[[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[0,7],[0,8],[0,9],[0,10],[0,11]],
+     desc:'Weak to maj7 chords',
+     relicName:'Royal Crown',relicDesc:'All stats +10%'}
+];
+
+// ─── STATE ───
+let audioCtx, masterGain, bgmGain, sfxGain, keysGain;
+let midiAccess, midiInput, midiOutput;
+let canvas, ctx, overlay;
+let difficulty = 'easy';
+let practice = false;
+let gameState = 'menu'; // menu, battle, victory, defeat
+let phase = 'idle'; // idle, player_attack, boss_telegraph, player_defend, resolve
+let currentBoss = null;
+let bossIndex = -1;
+let playerHP = 100, playerMaxHP = 100;
+let bossHP = 0, bossMaxHP = 0;
+let bossDisplayHP = 0, playerDisplayHP = 100;
+let relicsEarned = [false,false,false,false,false];
+let pressedNotes = new Set();
+let chordBuffer = new Set();
+let defendTarget = [];
+let defendTimer = 0;
+let defendTimeMax = 4;
+let turnCount = 0;
+let paused = false;
+let animTime = 0;
+let shakeAmount = 0;
+let particles = [];
+let floatingTexts = [];
+let bgmOscillators = [];
+let bgmPlaying = false;
+let muted = false;
+let phaseMessage = '';
+let phaseTimer = 0;
+let bossEntrance = 0;
+let bossDefeated = false;
+let lastFrameTime = 0;
+let telegraphNotes = [];
+let playerDamageBonus = 0;
+let healPerTurn = 0;
+
+// ─── INIT ───
+window.addEventListener('DOMContentLoaded', () => {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    overlay = document.getElementById('overlay');
+    buildBossGrid();
+    buildKeyboard();
+    buildRelicRow();
+    setupAudio();
+    setupControls();
+    requestAnimationFrame(gameLoop);
+});
+
+function buildBossGrid() {
+    const grid = document.getElementById('bossGrid');
+    BOSSES.forEach((b, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'start-btn boss-btn' + (i > 0 ? ' locked' : '');
+        btn.innerHTML = `<div style="font-size:1.1em">${b.name}</div><div style="font-size:0.7em;opacity:0.7">HP: ${b.hp} | ${b.desc}</div>`;
+        btn.style.borderLeft = `3px solid ${b.color}`;
+        btn.onclick = () => startBoss(i);
+        btn.id = 'bossBtn' + i;
+        grid.appendChild(btn);
+    });
+}
+
+function buildKeyboard() {
+    const row = document.getElementById('keyboardRow');
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
+        const div = document.createElement('div');
+        const pc = n % 12;
+        const isBlack = [1,3,6,8,10].includes(pc);
+        div.className = 'key-led' + (isBlack ? ' black' : '');
+        div.id = 'led' + n;
+        div.title = NOTE_NAMES[pc] + Math.floor(n/12-1);
+        row.appendChild(div);
+    }
+}
+
+function buildRelicRow() {
+    const row = document.getElementById('relicRow');
+    BOSSES.forEach((b, i) => {
+        const div = document.createElement('div');
+        div.className = 'relic';
+        div.id = 'relic' + i;
+        div.textContent = b.relicName;
+        div.title = b.relicDesc;
+        row.appendChild(div);
+    });
+}
+
+function updateRelicUI() {
+    let count = 0;
+    relicsEarned.forEach((e, i) => {
+        const el = document.getElementById('relic' + i);
+        if (e) { el.classList.add('earned'); count++; }
+        else el.classList.remove('earned');
+    });
+    document.getElementById('relicsVal').textContent = count + '/5';
+}
+
+// ─── AUDIO ───
+function setupAudio() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain(); masterGain.gain.value = 1; masterGain.connect(audioCtx.destination);
+    bgmGain = audioCtx.createGain(); bgmGain.gain.value = 0.4; bgmGain.connect(masterGain);
+    sfxGain = audioCtx.createGain(); sfxGain.gain.value = 0.6; sfxGain.connect(masterGain);
+    keysGain = audioCtx.createGain(); keysGain.gain.value = 0.5; keysGain.connect(masterGain);
+}
+
+function playPianoNote(midiNum, duration=1.5, bus=null) {
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const target = bus || keysGain;
+    const freq = 440 * Math.pow(2, (midiNum - 69) / 12);
+    const t = audioCtx.currentTime;
+    const attackTime = 0.005;
+    const decayTime = 0.3 + (69 - Math.min(midiNum, 69)) * 0.01;
+    const sustainLevel = 0.25;
+    const releaseTime = 0.4;
+    const harmonics = [
+        {mult:1, gain:0.5},
+        {mult:2, gain:0.18},
+        {mult:3, gain:0.08},
+        {mult:4, gain:0.04},
+        {mult:5, gain:0.02}
+    ];
+    const merger = audioCtx.createGain();
+    merger.gain.value = 0.6;
+    merger.connect(target);
+    harmonics.forEach(h => {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq * h.mult;
+        const env = audioCtx.createGain();
+        env.gain.setValueAtTime(0, t);
+        env.gain.linearRampToValueAtTime(h.gain, t + attackTime);
+        env.gain.exponentialRampToValueAtTime(Math.max(h.gain * sustainLevel, 0.001), t + attackTime + decayTime);
+        env.gain.setValueAtTime(h.gain * sustainLevel, t + duration - releaseTime);
+        env.gain.exponentialRampToValueAtTime(0.001, t + duration);
+        osc.connect(env);
+        env.connect(merger);
+        osc.start(t);
+        osc.stop(t + duration + 0.05);
+    });
+    // hammer noise
+    const noise = audioCtx.createBufferSource();
+    const noiseLen = audioCtx.sampleRate * 0.02;
+    const noiseBuf = audioCtx.createBuffer(1, noiseLen, audioCtx.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) nd[i] = (Math.random() * 2 - 1) * 0.3;
+    noise.buffer = noiseBuf;
+    const noiseEnv = audioCtx.createGain();
+    noiseEnv.gain.setValueAtTime(0.15, t);
+    noiseEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    const noiseFilt = audioCtx.createBiquadFilter();
+    noiseFilt.type = 'highpass';
+    noiseFilt.frequency.value = freq * 2;
+    noise.connect(noiseFilt);
+    noiseFilt.connect(noiseEnv);
+    noiseEnv.connect(merger);
+    noise.start(t);
+    noise.stop(t + 0.05);
+}
+
+function playSFX(type) {
+    if (!audioCtx || muted) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const env = audioCtx.createGain();
+    osc.connect(env); env.connect(sfxGain);
+    if (type === 'hit') {
+        osc.type = 'sawtooth'; osc.frequency.value = 200;
+        osc.frequency.exponentialRampToValueAtTime(80, t + 0.3);
+        env.gain.setValueAtTime(0.4, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc.start(t); osc.stop(t + 0.35);
+    } else if (type === 'crit') {
+        osc.type = 'square'; osc.frequency.value = 400;
+        osc.frequency.exponentialRampToValueAtTime(800, t + 0.1);
+        osc.frequency.exponentialRampToValueAtTime(200, t + 0.4);
+        env.gain.setValueAtTime(0.3, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.start(t); osc.stop(t + 0.45);
+    } else if (type === 'miss') {
+        osc.type = 'sine'; osc.frequency.value = 300;
+        osc.frequency.exponentialRampToValueAtTime(100, t + 0.4);
+        env.gain.setValueAtTime(0.2, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+        osc.start(t); osc.stop(t + 0.45);
+    } else if (type === 'parry') {
+        osc.type = 'triangle'; osc.frequency.value = 600;
+        osc.frequency.linearRampToValueAtTime(1200, t + 0.15);
+        env.gain.setValueAtTime(0.3, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        osc.start(t); osc.stop(t + 0.35);
+    } else if (type === 'damage') {
+        osc.type = 'sawtooth'; osc.frequency.value = 150;
+        osc.frequency.exponentialRampToValueAtTime(50, t + 0.5);
+        env.gain.setValueAtTime(0.35, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        osc.start(t); osc.stop(t + 0.55);
+    } else if (type === 'victory') {
+        [0,0.15,0.3,0.45].forEach((d, i) => {
+            const o2 = audioCtx.createOscillator();
+            const e2 = audioCtx.createGain();
+            o2.connect(e2); e2.connect(sfxGain);
+            o2.type = 'triangle';
+            o2.frequency.value = [523,659,784,1047][i];
+            e2.gain.setValueAtTime(0, t+d);
+            e2.gain.linearRampToValueAtTime(0.25, t+d+0.05);
+            e2.gain.exponentialRampToValueAtTime(0.001, t+d+0.4);
+            o2.start(t+d); o2.stop(t+d+0.45);
+        });
+    }
+}
+
+// ─── BGM ───
+function startBGM(bossIdx) {
+    stopBGM();
+    if (!audioCtx || muted) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    bgmPlaying = true;
+    const tempo = 0.5 + bossIdx * 0.08;
+    // Cm: C=60, Eb=63, G=67, Bb=70, Ab=68, F=65
+    const progression = [[60,63,67],[67,70,74],[68,72,75],[65,68,72]];
+    const bassNotes = [36,43,44,41];
+    let chordIdx = 0;
+    function scheduleChord() {
+        if (!bgmPlaying) return;
+        const t = audioCtx.currentTime;
+        const dur = 2 / (1 + tempo * 0.3);
+        // bass drone
+        const bassOsc = audioCtx.createOscillator();
+        const bassEnv = audioCtx.createGain();
+        bassOsc.type = 'triangle';
+        bassOsc.frequency.value = 440 * Math.pow(2, (bassNotes[chordIdx % 4] - 69) / 12);
+        bassEnv.gain.setValueAtTime(0, t);
+        bassEnv.gain.linearRampToValueAtTime(0.12, t + 0.1);
+        bassEnv.gain.setValueAtTime(0.12, t + dur - 0.1);
+        bassEnv.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        bassOsc.connect(bassEnv); bassEnv.connect(bgmGain);
+        bassOsc.start(t); bassOsc.stop(t + dur + 0.05);
+        bgmOscillators.push(bassOsc);
+        // pad chord
+        const chord = progression[chordIdx % 4];
+        chord.forEach(n => {
+            const padOsc = audioCtx.createOscillator();
+            const padEnv = audioCtx.createGain();
+            padOsc.type = 'sine';
+            padOsc.frequency.value = 440 * Math.pow(2, (n - 69) / 12);
+            padEnv.gain.setValueAtTime(0, t);
+            padEnv.gain.linearRampToValueAtTime(0.04, t + 0.2);
+            padEnv.gain.setValueAtTime(0.04, t + dur - 0.2);
+            padEnv.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            padOsc.connect(padEnv); padEnv.connect(bgmGain);
+            padOsc.start(t); padOsc.stop(t + dur + 0.05);
+            bgmOscillators.push(padOsc);
+        });
+        // arpeggio
+        const arpNotes = [...chord, chord[0] + 12];
+        arpNotes.forEach((n, i) => {
+            const arpOsc = audioCtx.createOscillator();
+            const arpEnv = audioCtx.createGain();
+            arpOsc.type = 'sine';
+            const arpFreq = 440 * Math.pow(2, ((n + 12) - 69) / 12);
+            arpOsc.frequency.value = arpFreq;
+            const onset = t + i * (dur / arpNotes.length);
+            const arpDur = dur / arpNotes.length * 0.8;
+            arpEnv.gain.setValueAtTime(0, onset);
+            arpEnv.gain.linearRampToValueAtTime(0.025, onset + 0.01);
+            arpEnv.gain.exponentialRampToValueAtTime(0.001, onset + arpDur);
+            arpOsc.connect(arpEnv); arpEnv.connect(bgmGain);
+            arpOsc.start(onset); arpOsc.stop(onset + arpDur + 0.05);
+            bgmOscillators.push(arpOsc);
+        });
+        chordIdx++;
+        bgmOscillators._timeout = setTimeout(scheduleChord, dur * 1000 - 50);
+    }
+    scheduleChord();
+}
+
+function stopBGM() {
+    bgmPlaying = false;
+    if (bgmOscillators._timeout) clearTimeout(bgmOscillators._timeout);
+    bgmOscillators.forEach(o => { try { o.stop(); } catch(e){} });
+    bgmOscillators = [];
+}
+
+// ─── MIDI ───
+document.getElementById('connectBtn').onclick = async () => {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    try {
+        midiAccess = await navigator.requestMIDIAccess({sysex: false});
+        const inputs = Array.from(midiAccess.inputs.values());
+        const outputs = Array.from(midiAccess.outputs.values());
+        if (inputs.length > 0) {
+            midiInput = inputs[0];
+            midiInput.onmidimessage = onMIDI;
+        }
+        if (outputs.length > 0) midiOutput = outputs[0];
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('midiStatus').textContent = (midiInput ? midiInput.name : 'Input') + (midiOutput ? ' + LED' : '');
+        unlockBosses();
+    } catch(e) {
+        document.getElementById('midiStatus').textContent = 'MIDI error: ' + e.message;
+    }
+};
+
+function onMIDI(e) {
+    const [status, note, vel] = e.data;
+    const cmd = status & 0xF0;
+    if (cmd === 0x90 && vel > 0) {
+        pressedNotes.add(note);
+        chordBuffer.add(note);
+        playPianoNote(note);
+        setLED(note, LED_COLORS.white);
+        handleNoteOn(note);
+    } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
+        pressedNotes.delete(note);
+        setLED(note, LED_COLORS.off);
+        if (pressedNotes.size === 0 && chordBuffer.size > 0) {
+            handleChordRelease();
+        }
+    }
+}
+
+function handleNoteOn(note) {
+    if (phase === 'player_defend') {
+        const pc = note % 12;
+        if (defendTarget.includes(pc)) {
+            setLED(note, LED_COLORS.green);
+            updateLEDVisual(note, '#44ff88');
+        } else {
+            setLED(note, LED_COLORS.red);
+            updateLEDVisual(note, '#ff4444');
+        }
+    }
+}
+
+function handleChordRelease() {
+    if (phase === 'player_attack') {
+        const notes = Array.from(chordBuffer);
+        chordBuffer.clear();
+        resolveAttack(notes);
+    } else if (phase === 'player_defend') {
+        const notes = Array.from(chordBuffer);
+        chordBuffer.clear();
+        resolveDefend(notes);
+    } else {
+        chordBuffer.clear();
+    }
+}
+
+function setLED(note, color) {
+    if (midiOutput && note >= MIDI_MIN && note <= MIDI_MAX) {
+        midiOutput.send([0x90, note, color]);
+    }
+    // visual
+    const el = document.getElementById('led' + note);
+    if (el) {
+        if (color === 0) { el.style.background = ''; el.classList.remove('active'); el.style.color = ''; }
+        else {
+            const c = ledColorToCSS(color);
+            el.style.background = c;
+            el.style.color = c;
+            el.classList.add('active');
+        }
+    }
+}
+
+function updateLEDVisual(note, color) {
+    const el = document.getElementById('led' + note);
+    if (el) { el.style.background = color; el.style.color = color; el.classList.add('active'); }
+}
+
+function ledColorToCSS(vel) {
+    if (vel <= 5) return '';
+    if (vel <= 20) return '#ff3333';
+    if (vel <= 40) return '#33ff33';
+    if (vel <= 60) return '#3366ff';
+    if (vel <= 80) return '#ffff33';
+    if (vel <= 100) return '#33ffff';
+    if (vel <= 115) return '#cc44ff';
+    return '#ffffff';
+}
+
+function clearAllLEDs() {
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) setLED(n, LED_COLORS.off);
+}
+
+function flashAllLEDs(color, duration=500) {
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) setLED(n, color);
+    setTimeout(clearAllLEDs, duration);
+}
+
+function rainbowCascade() {
+    const colors = [LED_COLORS.red, LED_COLORS.green, LED_COLORS.blue, LED_COLORS.yellow, LED_COLORS.cyan, LED_COLORS.purple, LED_COLORS.white];
+    let i = 0;
+    const interval = setInterval(() => {
+        if (i >= MIDI_MAX - MIDI_MIN + 8) { clearInterval(interval); clearAllLEDs(); return; }
+        for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
+            const idx = (n - MIDI_MIN + i) % colors.length;
+            setLED(n, colors[idx]);
+        }
+        i++;
+    }, 60);
+}
+
+// ─── CONTROLS ───
+function setupControls() {
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+        btn.onclick = () => {
+            document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            difficulty = btn.dataset.diff;
+        };
+    });
+    document.getElementById('practiceMode').onchange = e => practice = e.target.checked;
+    document.getElementById('bgmVol').oninput = e => { if(bgmGain) bgmGain.gain.value = e.target.value/100; };
+    document.getElementById('sfxVol').oninput = e => { if(sfxGain) sfxGain.gain.value = e.target.value/100; };
+    document.getElementById('keysVol').oninput = e => { if(keysGain) keysGain.gain.value = e.target.value/100; };
+    document.getElementById('muteBtn').onclick = () => {
+        muted = !muted;
+        const btn = document.getElementById('muteBtn');
+        btn.textContent = muted ? 'Unmute' : 'Mute All';
+        btn.classList.toggle('muted', muted);
+        if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+        if (muted) stopBGM();
+    };
+    document.addEventListener('keydown', e => {
+        if (e.code === 'Space') { e.preventDefault(); paused = !paused; }
+        if (e.code === 'KeyR' && gameState === 'battle') restartBoss();
+        if (e.code === 'Escape') quitToMenu();
+    });
+}
+
+function unlockBosses() {
+    // boss 0 always unlocked, subsequent unlock when previous defeated
+    for (let i = 0; i < BOSSES.length; i++) {
+        const btn = document.getElementById('bossBtn' + i);
+        if (i === 0 || relicsEarned[i - 1]) {
+            btn.classList.remove('locked');
+        }
+    }
+}
+
+// ─── GAME LOGIC ───
+function startBoss(idx) {
+    if (idx > 0 && !relicsEarned[idx - 1]) return;
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    bossIndex = idx;
+    currentBoss = BOSSES[idx];
+    bossHP = currentBoss.hp;
+    bossMaxHP = currentBoss.hp;
+    bossDisplayHP = bossHP;
+    // compute player stats from relics
+    playerMaxHP = 100;
+    playerDamageBonus = 0;
+    healPerTurn = 0;
+    if (relicsEarned[0]) playerDamageBonus += 0.10;
+    if (relicsEarned[1]) playerMaxHP += 15;
+    if (relicsEarned[2]) healPerTurn += 5;
+    if (relicsEarned[3]) playerDamageBonus += 0.20;
+    if (relicsEarned[4]) { playerDamageBonus += 0.10; playerMaxHP += 10; healPerTurn += 2; }
+    playerHP = playerMaxHP;
+    playerDisplayHP = playerHP;
+    turnCount = 0;
+    gameState = 'battle';
+    bossEntrance = 1.5;
+    bossDefeated = false;
+    overlay.classList.add('hidden');
+    particles = [];
+    floatingTexts = [];
+    slashEffects = [];
+    clearAllLEDs();
+    startBGM(idx);
+    startVSIntro();
+    showPhase('Boss Appears!', currentBoss.color);
+    document.getElementById('bossNameVal').textContent = currentBoss.name.split(' ')[0];
+    setTimeout(() => beginPlayerAttack(), 2500);
+}
+
+function restartBoss() {
+    if (bossIndex >= 0) startBoss(bossIndex);
+}
+
+function quitToMenu() {
+    gameState = 'menu';
+    phase = 'idle';
+    stopBGM();
+    clearAllLEDs();
+    overlay.classList.remove('hidden');
+    unlockBosses();
+    document.getElementById('phaseIndicator').style.display = 'none';
+    document.getElementById('bossNameVal').textContent = '--';
+    document.getElementById('bossHPVal').textContent = '--';
+    document.getElementById('phaseVal').textContent = '--';
+}
+
+function beginPlayerAttack() {
+    if (gameState !== 'battle') return;
+    phase = 'player_attack';
+    chordBuffer.clear();
+    showPhase('YOUR ATTACK!', '#00f5d4');
+    document.getElementById('phaseVal').textContent = 'ATTACK';
+    // heal from relic
+    if (healPerTurn > 0) {
+        playerHP = Math.min(playerHP + healPerTurn, playerMaxHP);
+        spawnFloatingText('+' + healPerTurn + ' HP', 200, 300, '#44ff88');
+    }
+    // LED: light valid chord root notes in white, weakness chord tones in cyan
+    clearAllLEDs();
+    const weakIntervals = CHORD_TYPES[currentBoss.weakness];
+    // Light all natural roots (C, D, E, F, G, A, B) in white as hint
+    const naturalPCs = [0, 2, 4, 5, 7, 9, 11];
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
+        if (naturalPCs.includes(n % 12)) {
+            setLED(n, LED_COLORS.white);
+        }
+    }
+    // Overlay weakness chord tones for every possible root in cyan
+    if (weakIntervals) {
+        for (let root = MIDI_MIN; root <= MIDI_MAX; root++) {
+            const allFit = weakIntervals.every(iv => (root + iv) >= MIDI_MIN && (root + iv) <= MIDI_MAX);
+            if (allFit) {
+                weakIntervals.forEach(iv => {
+                    setLED(root + iv, LED_COLORS.cyan);
+                });
+            }
+        }
+    }
+}
+
+function resolveAttack(notes) {
+    if (phase !== 'player_attack') return;
+    phase = 'resolve';
+    clearAllLEDs();
+    const result = identifyChord(notes);
+    if (!result) {
+        playSFX('miss');
+        shakeAmount = 3;
+        spawnFloatingText('MISS!', 700, 250, '#888888');
+        showPhase('Miss...', '#888');
+    } else if (result.type === currentBoss.weakness) {
+        const baseDmg = 15;
+        const dmg = Math.round(baseDmg * 3 * (1 + playerDamageBonus));
+        bossHP = Math.max(0, bossHP - dmg);
+        playSFX('crit');
+        shakeAmount = 15;
+        spawnFloatingText('WEAKNESS x3! -' + dmg, 700, 200, '#ffdd00');
+        spawnFloatingText(result.rootName + ' ' + result.type, 700, 170, '#ffffff');
+        spawnExplosion(750, 250, currentBoss.color, 40);
+        spawnExplosion(750, 250, '#ffdd00', 25);
+        spawnSlash(750, 250, -0.3, '#ffdd00');
+        spawnSlash(750, 250, 0.5, '#ffffff');
+        showPhase('CRITICAL! -' + dmg, '#ffdd00');
+    } else {
+        const baseDmg = 15;
+        const dmg = Math.round(baseDmg * (1 + playerDamageBonus));
+        bossHP = Math.max(0, bossHP - dmg);
+        playSFX('hit');
+        shakeAmount = 8;
+        spawnFloatingText(result.rootName + ' ' + result.type + ' -' + dmg, 700, 220, '#ff6666');
+        spawnExplosion(750, 250, '#ff8844', 20);
+        spawnSlash(750, 250, Math.random() * 0.6 - 0.3, '#ff8844');
+        showPhase('Hit! -' + dmg, '#ff8844');
+    }
+    if (bossHP <= 0) {
+        setTimeout(() => bossDefeat(), 1000);
+    } else {
+        setTimeout(() => beginBossTelegraph(), 1500);
+    }
+}
+
+function beginBossTelegraph() {
+    if (gameState !== 'battle') return;
+    phase = 'boss_telegraph';
+    showPhase('BOSS ATTACKS!', currentBoss.color);
+    document.getElementById('phaseVal').textContent = 'DEFEND';
+    clearAllLEDs();
+    // pick random interval
+    const intervals = currentBoss.intervals;
+    const interval = intervals[Math.floor(Math.random() * intervals.length)];
+    const baseNote = MIDI_MIN + Math.floor(Math.random() * 20);
+    telegraphNotes = [baseNote, baseNote + interval[1]];
+    defendTarget = telegraphNotes.map(n => n % 12);
+    // play telegraph notes with audio
+    setTimeout(() => {
+        playPianoNote(telegraphNotes[0], 1, sfxGain);
+        if (difficulty === 'easy') setLED(telegraphNotes[0], LED_COLORS.yellow);
+    }, 300);
+    setTimeout(() => {
+        playPianoNote(telegraphNotes[1], 1, sfxGain);
+        if (difficulty === 'easy') setLED(telegraphNotes[1], LED_COLORS.yellow);
+    }, 800);
+    setTimeout(() => {
+        clearAllLEDs();
+        beginPlayerDefend();
+    }, 1500);
+}
+
+function beginPlayerDefend() {
+    if (gameState !== 'battle') return;
+    phase = 'player_defend';
+    chordBuffer.clear();
+    defendTimeMax = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 3 : 2;
+    defendTimer = defendTimeMax;
+    showPhase('PARRY! Echo the interval', '#ffdd00');
+    // start countdown
+    const countdownInterval = setInterval(() => {
+        if (paused) return;
+        if (phase !== 'player_defend') { clearInterval(countdownInterval); return; }
+        defendTimer -= 0.05;
+        if (defendTimer <= 0) {
+            clearInterval(countdownInterval);
+            failDefend();
+        }
+    }, 50);
+}
+
+function resolveDefend(notes) {
+    if (phase !== 'player_defend') return;
+    phase = 'resolve';
+    const playedPCs = notes.map(n => n % 12);
+    const matched = defendTarget.every(pc => playedPCs.includes(pc));
+    clearAllLEDs();
+    if (matched) {
+        playSFX('parry');
+        flashAllLEDs(LED_COLORS.green, 400);
+        spawnFloatingText('PARRIED!', 200, 200, '#44ff88');
+        showPhase('Perfect Parry!', '#44ff88');
+    } else {
+        takeDamage();
+    }
+    turnCount++;
+    setTimeout(() => beginPlayerAttack(), 1500);
+}
+
+function failDefend() {
+    if (phase !== 'player_defend') return;
+    phase = 'resolve';
+    clearAllLEDs();
+    takeDamage();
+    turnCount++;
+    setTimeout(() => beginPlayerAttack(), 1500);
+}
+
+function takeDamage() {
+    if (practice) {
+        spawnFloatingText('(Practice - no damage)', 200, 250, '#888');
+        showPhase('Missed! (Practice)', '#888');
+        return;
+    }
+    const [lo, hi] = currentBoss.dmg;
+    const dmg = lo + Math.floor(Math.random() * (hi - lo + 1));
+    playerHP = Math.max(0, playerHP - dmg);
+    playSFX('damage');
+    shakeAmount = 12;
+    flashAllLEDs(LED_COLORS.red, 500);
+    spawnFloatingText('-' + dmg + ' HP', 200, 220, '#ff3333');
+    spawnExplosion(250, 300, '#ff3333', 25);
+    showPhase('Ouch! -' + dmg + ' HP', '#ff3333');
+    if (playerHP <= 0) {
+        setTimeout(() => playerDefeat(), 800);
+    }
+}
+
+function bossDefeat() {
+    gameState = 'victory';
+    phase = 'idle';
+    bossDefeated = true;
+    stopBGM();
+    playSFX('victory');
+    rainbowCascade();
+    relicsEarned[bossIndex] = true;
+    updateRelicUI();
+    showPhase(currentBoss.name + ' DEFEATED!', '#ffdd00');
+    spawnExplosion(750, 250, '#ffdd00', 60);
+    spawnExplosion(750, 250, currentBoss.color, 40);
+    // show victory after delay
+    setTimeout(() => {
+        overlay.classList.remove('hidden');
+        const grid = document.getElementById('bossGrid');
+        // temporarily show victory
+        const titleEl = overlay.querySelector('.overlay-title');
+        const subEl = overlay.querySelector('.overlay-sub');
+        titleEl.textContent = 'VICTORY!';
+        subEl.textContent = 'Relic earned: ' + currentBoss.relicName + ' (' + currentBoss.relicDesc + ')';
+        unlockBosses();
+        // restore menu after a bit
+        setTimeout(() => {
+            titleEl.textContent = 'Chord Duel';
+            subEl.textContent = 'Turn-based boss battles with your MIDI keyboard. Play chords to attack and echo intervals to defend!';
+        }, 5000);
+    }, 2500);
+}
+
+function playerDefeat() {
+    gameState = 'defeat';
+    phase = 'idle';
+    stopBGM();
+    flashAllLEDs(LED_COLORS.red, 1000);
+    showPhase('DEFEATED...', '#ff3333');
+    setTimeout(() => {
+        overlay.classList.remove('hidden');
+        const titleEl = overlay.querySelector('.overlay-title');
+        const subEl = overlay.querySelector('.overlay-sub');
+        titleEl.textContent = 'DEFEAT';
+        subEl.textContent = 'You were slain by ' + currentBoss.name + '. Press a boss button to try again!';
+        unlockBosses();
+        setTimeout(() => {
+            titleEl.textContent = 'Chord Duel';
+            subEl.textContent = 'Turn-based boss battles with your MIDI keyboard. Play chords to attack and echo intervals to defend!';
+        }, 5000);
+    }, 2000);
+}
+
+// ─── CHORD IDENTIFICATION ───
+function identifyChord(midiNotes) {
+    if (midiNotes.length < 3) return null;
+    const pcs = [...new Set(midiNotes.map(n => n % 12))].sort((a,b) => a - b);
+    if (pcs.length < 3) return null;
+    for (const root of pcs) {
+        const intervals = pcs.map(pc => (pc - root + 12) % 12).sort((a,b) => a - b);
+        for (const [typeName, typeIntervals] of Object.entries(CHORD_TYPES)) {
+            if (intervals.length === typeIntervals.length &&
+                intervals.every((v, i) => v === typeIntervals[i])) {
+                return { type: typeName, root: root, rootName: NOTE_NAMES[root] };
+            }
+        }
+    }
+    return null;
+}
+
+// ─── PHASE INDICATOR ───
+function showPhase(text, color) {
+    const el = document.getElementById('phaseIndicator');
+    el.textContent = text;
+    el.style.display = 'block';
+    el.style.color = color || '#fff';
+    el.style.borderColor = color || '#fff';
+    el.style.border = '1px solid ' + (color || '#fff');
+    phaseMessage = text;
+    phaseTimer = 3;
+}
+
+// ─── PARTICLES ───
+function spawnExplosion(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 50 + Math.random() * 200;
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1,
+            decay: 0.5 + Math.random() * 1.5,
+            size: 2 + Math.random() * 4,
+            color: color
+        });
+    }
+}
+
+function spawnFloatingText(text, x, y, color) {
+    floatingTexts.push({ text, x, y, life: 2, color, vy: -40 });
+}
+
+// ─── AMBIENT PARTICLES ───
+let ambientParticles = [];
+function initAmbientParticles() {
+    ambientParticles = [];
+    for (let i = 0; i < 30; i++) {
+        ambientParticles.push({
+            x: Math.random() * 1060,
+            y: Math.random() * 500,
+            size: 1 + Math.random() * 2,
+            speed: 5 + Math.random() * 15,
+            alpha: 0.1 + Math.random() * 0.3,
+            phase: Math.random() * Math.PI * 2
+        });
+    }
+}
+initAmbientParticles();
+
+// ─── VS INTRO ANIMATION ───
+let vsIntroTimer = 0;
+let vsIntroActive = false;
+
+function startVSIntro() {
+    vsIntroActive = true;
+    vsIntroTimer = 2.0;
+}
+
+function drawVSIntro(dt) {
+    if (!vsIntroActive) return;
+    const W = canvas.width, H = canvas.height;
+    const progress = 1 - vsIntroTimer / 2.0;
+    // dark overlay
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.7 * Math.min(1, progress * 3)) + ')';
+    ctx.fillRect(0, 0, W, H);
+    // VS text
+    const scale = 1 + Math.max(0, 1 - progress * 4) * 3;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = Math.min(1, progress * 4) * (vsIntroTimer > 0.3 ? 1 : vsIntroTimer / 0.3);
+    ctx.font = 'bold 80px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffdd00';
+    ctx.shadowColor = '#ffdd00';
+    ctx.shadowBlur = 30;
+    ctx.fillText('VS', 0, 0);
+    ctx.shadowBlur = 0;
+    // player name left
+    ctx.font = 'bold 20px Segoe UI';
+    ctx.fillStyle = '#00f5d4';
+    ctx.fillText('PLAYER', -180 / scale, 0);
+    // boss name right
+    ctx.fillStyle = currentBoss.color;
+    ctx.fillText(currentBoss.name.split(' ').pop(), 180 / scale, 0);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+}
+
+// ─── SLASH/IMPACT EFFECTS ───
+let slashEffects = [];
+function spawnSlash(x, y, angle, color) {
+    slashEffects.push({ x, y, angle, color, life: 0.4, maxLife: 0.4 });
+}
+
+function drawSlashEffects(dt) {
+    slashEffects = slashEffects.filter(s => {
+        s.life -= dt;
+        if (s.life <= 0) return false;
+        const progress = 1 - s.life / s.maxLife;
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.angle);
+        ctx.globalAlpha = s.life / s.maxLife;
+        ctx.strokeStyle = s.color;
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = 15;
+        ctx.lineWidth = 3 - progress * 2;
+        ctx.beginPath();
+        const len = 40 + progress * 60;
+        ctx.moveTo(-len / 2, 0);
+        ctx.quadraticCurveTo(0, -10 + progress * 20, len / 2, 0);
+        ctx.stroke();
+        ctx.restore();
+        return true;
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+}
+
+// ─── RENDER ───
+function gameLoop(timestamp) {
+    const dt = Math.min((timestamp - (lastFrameTime || timestamp)) / 1000, 0.1);
+    lastFrameTime = timestamp;
+    if (!paused) {
+        animTime += dt;
+        updateParticles(dt);
+        updateFloatingTexts(dt);
+        if (shakeAmount > 0) shakeAmount = Math.max(0, shakeAmount - dt * 30);
+        bossDisplayHP += (bossHP - bossDisplayHP) * dt * 8;
+        playerDisplayHP += (playerHP - playerDisplayHP) * dt * 8;
+        if (bossEntrance > 0) bossEntrance -= dt;
+        if (phaseTimer > 0) {
+            phaseTimer -= dt;
+            if (phaseTimer <= 0) document.getElementById('phaseIndicator').style.display = 'none';
+        }
+        if (vsIntroActive) {
+            vsIntroTimer -= dt;
+            if (vsIntroTimer <= 0) vsIntroActive = false;
+        }
+    }
+    // update stats
+    document.getElementById('playerHPVal').textContent = Math.round(playerDisplayHP);
+    if (currentBoss) document.getElementById('bossHPVal').textContent = Math.round(bossDisplayHP);
+    render(dt);
+    requestAnimationFrame(gameLoop);
+}
+
+function updateParticles(dt) {
+    particles = particles.filter(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 200 * dt; // gravity
+        p.life -= p.decay * dt;
+        return p.life > 0;
+    });
+}
+
+function updateFloatingTexts(dt) {
+    floatingTexts = floatingTexts.filter(ft => {
+        ft.y += ft.vy * dt;
+        ft.life -= dt;
+        return ft.life > 0;
+    });
+}
+
+function render(dt) {
+    const W = canvas.width, H = canvas.height;
+    ctx.save();
+    // screen shake
+    if (shakeAmount > 0) {
+        ctx.translate(
+            (Math.random() - 0.5) * shakeAmount * 2,
+            (Math.random() - 0.5) * shakeAmount * 2
+        );
+    }
+    // background
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0a0a1a');
+    bgGrad.addColorStop(0.5, '#0d1b2a');
+    bgGrad.addColorStop(1, '#0a0a22');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+    // atmospheric fog layers
+    if (currentBoss) {
+        const fogAlpha = 0.03 + Math.sin(animTime * 0.3) * 0.01;
+        ctx.fillStyle = currentBoss.color + '08';
+        ctx.fillRect(0, 0, W, H);
+        // moving fog
+        for (let i = 0; i < 3; i++) {
+            ctx.globalAlpha = fogAlpha;
+            ctx.fillStyle = currentBoss.color;
+            const fx = Math.sin(animTime * 0.2 + i) * 100 + W / 2;
+            const fy = H * 0.5 + Math.cos(animTime * 0.15 + i * 2) * 50;
+            const fogGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, 200);
+            fogGrad.addColorStop(0, currentBoss.color + '15');
+            fogGrad.addColorStop(1, 'transparent');
+            ctx.fillStyle = fogGrad;
+            ctx.fillRect(fx - 200, fy - 200, 400, 400);
+        }
+        ctx.globalAlpha = 1;
+    }
+    // ground with perspective lines
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect(0, H * 0.75, W, H * 0.25);
+    // ground gradient edge
+    const groundGrad = ctx.createLinearGradient(0, H * 0.73, 0, H * 0.78);
+    groundGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    groundGrad.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+    groundGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, H * 0.73, W, H * 0.05);
+    // perspective grid on ground
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    const vanishX = W / 2, vanishY = H * 0.4;
+    for (let i = 0; i <= 10; i++) {
+        const x = i * (W / 10);
+        ctx.beginPath();
+        ctx.moveTo(x, H);
+        ctx.lineTo(vanishX + (x - vanishX) * 0.3, H * 0.75);
+        ctx.stroke();
+    }
+    for (let i = 0; i < 5; i++) {
+        const y = H * 0.75 + i * (H * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+    }
+    // ambient floating particles
+    ambientParticles.forEach(p => {
+        p.y -= p.speed * dt;
+        p.phase += dt;
+        if (p.y < -10) { p.y = 510; p.x = Math.random() * 1060; }
+        ctx.globalAlpha = p.alpha * (0.5 + Math.sin(p.phase) * 0.5);
+        ctx.fillStyle = currentBoss ? currentBoss.color : '#00f5d4';
+        ctx.beginPath();
+        ctx.arc(p.x + Math.sin(p.phase * 0.5) * 10, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    // center arena circle (subtle)
+    if (gameState === 'battle') {
+        const centerX = W / 2, centerY = H * 0.55;
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(centerX, centerY, 120, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(centerX, centerY, 80, 0, Math.PI * 2); ctx.stroke();
+        // pulsing arena glow during attack phase
+        if (phase === 'player_attack') {
+            const arenaGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 100);
+            arenaGlow.addColorStop(0, 'rgba(0,245,212,' + (0.05 + Math.sin(animTime * 4) * 0.03) + ')');
+            arenaGlow.addColorStop(1, 'rgba(0,245,212,0)');
+            ctx.fillStyle = arenaGlow;
+            ctx.fillRect(centerX - 100, centerY - 100, 200, 200);
+        } else if (phase === 'player_defend') {
+            const arenaGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 100);
+            arenaGlow.addColorStop(0, 'rgba(255,221,0,' + (0.05 + Math.sin(animTime * 6) * 0.04) + ')');
+            arenaGlow.addColorStop(1, 'rgba(255,221,0,0)');
+            ctx.fillStyle = arenaGlow;
+            ctx.fillRect(centerX - 100, centerY - 100, 200, 200);
+        }
+        // turn indicator
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.font = '11px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('Turn ' + (turnCount + 1), centerX, centerY + 140);
+        ctx.textAlign = 'left';
+    }
+    if (gameState === 'battle' || gameState === 'victory' || gameState === 'defeat') {
+        drawPlayer(dt);
+        drawBoss(dt);
+        drawHPBars();
+        drawDefendTimer();
+        drawChordHint();
+    }
+    // paused overlay
+    if (paused && gameState === 'battle') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.font = 'bold 40px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('PAUSED', W/2, H/2);
+        ctx.font = '16px Segoe UI';
+        ctx.fillStyle = '#888';
+        ctx.fillText('Press SPACE to resume', W/2, H/2 + 30);
+        ctx.textAlign = 'left';
+    }
+    drawSlashEffects(dt);
+    drawParticles();
+    drawFloatingTexts();
+    // VS Intro overlay
+    if (vsIntroActive) drawVSIntro(dt);
+    ctx.restore();
+}
+
+function drawPlayer(dt) {
+    const px = 200, py = 280;
+    const bob = Math.sin(animTime * 2) * 3;
+    ctx.save();
+    ctx.translate(px, py + bob);
+    // glow
+    const glow = ctx.createRadialGradient(0, 0, 10, 0, 0, 80);
+    glow.addColorStop(0, 'rgba(0,245,212,0.15)');
+    glow.addColorStop(1, 'rgba(0,245,212,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(-80, -80, 160, 160);
+    // body (knight silhouette)
+    ctx.fillStyle = '#00f5d4';
+    ctx.shadowColor = '#00f5d4';
+    ctx.shadowBlur = 15;
+    // helmet
+    ctx.beginPath();
+    ctx.arc(0, -50, 18, 0, Math.PI * 2);
+    ctx.fill();
+    // visor
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(-10, -54, 20, 6);
+    // body
+    ctx.fillStyle = '#00d4b4';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(-20, -32);
+    ctx.lineTo(20, -32);
+    ctx.lineTo(25, 20);
+    ctx.lineTo(-25, 20);
+    ctx.closePath();
+    ctx.fill();
+    // shield arm
+    ctx.fillStyle = '#00a090';
+    ctx.fillRect(-30, -20, 12, 30);
+    // sword arm
+    ctx.fillStyle = '#00d4b4';
+    ctx.fillRect(18, -20, 10, 25);
+    // sword
+    const swordAngle = phase === 'player_attack' ? Math.sin(animTime * 8) * 0.3 : 0;
+    ctx.save();
+    ctx.translate(28, -15);
+    ctx.rotate(-0.5 + swordAngle);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(-2, -45, 4, 40);
+    // hilt
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillRect(-6, -5, 12, 4);
+    ctx.restore();
+    // legs
+    ctx.fillStyle = '#008878';
+    ctx.shadowBlur = 0;
+    ctx.fillRect(-15, 20, 12, 25);
+    ctx.fillRect(3, 20, 12, 25);
+    // HP indicator glow
+    if (playerHP < playerMaxHP * 0.3) {
+        const dangerGlow = ctx.createRadialGradient(0, 0, 10, 0, 0, 60);
+        dangerGlow.addColorStop(0, 'rgba(255,100,100,'+(.2+Math.sin(animTime*6)*.15)+')');
+        dangerGlow.addColorStop(1, 'rgba(255,100,100,0)');
+        ctx.fillStyle = dangerGlow;
+        ctx.fillRect(-60, -60, 120, 120);
+    }
+    ctx.restore();
+}
+
+function drawBoss(dt) {
+    if (!currentBoss) return;
+    const bx = 800, by = 260;
+    const bob = Math.sin(animTime * 1.5) * 5;
+    const entranceOffset = bossEntrance > 0 ? bossEntrance * 300 : 0;
+    ctx.save();
+    ctx.translate(bx + entranceOffset, by + bob);
+    ctx.globalAlpha = bossEntrance > 0 ? 1 - bossEntrance / 1.5 : 1;
+    // glow
+    const glow = ctx.createRadialGradient(0, 0, 20, 0, 0, 120);
+    glow.addColorStop(0, currentBoss.color + '30');
+    glow.addColorStop(1, currentBoss.color + '00');
+    ctx.fillStyle = glow;
+    ctx.fillRect(-120, -120, 240, 240);
+    ctx.shadowColor = currentBoss.color;
+    ctx.shadowBlur = 20;
+    // draw boss based on index
+    if (bossIndex === 0) drawDemon(dt);
+    else if (bossIndex === 1) drawSnake(dt);
+    else if (bossIndex === 2) drawSiren(dt);
+    else if (bossIndex === 3) drawSamurai(dt);
+    else if (bossIndex === 4) drawMonarch(dt);
+    // damage flash
+    if (bossDisplayHP > bossHP + 1) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-50, -70, 100, 140);
+    }
+    ctx.restore();
+}
+
+function drawDemon(dt) {
+    ctx.fillStyle = '#ff3333';
+    // horns
+    ctx.beginPath(); ctx.moveTo(-15, -65); ctx.lineTo(-25, -90); ctx.lineTo(-5, -65); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(15, -65); ctx.lineTo(25, -90); ctx.lineTo(5, -65); ctx.fill();
+    // head
+    ctx.beginPath(); ctx.arc(0, -50, 22, 0, Math.PI * 2); ctx.fill();
+    // eyes
+    ctx.fillStyle = '#ffff00';
+    ctx.fillRect(-10, -55, 6, 4);
+    ctx.fillRect(4, -55, 6, 4);
+    // body
+    ctx.fillStyle = '#cc2222';
+    ctx.beginPath();
+    ctx.moveTo(-28, -28);
+    ctx.lineTo(28, -28);
+    ctx.lineTo(35, 40);
+    ctx.lineTo(-35, 40);
+    ctx.closePath();
+    ctx.fill();
+    // wings
+    ctx.fillStyle = '#aa1111';
+    const wingFlap = Math.sin(animTime * 4) * 10;
+    ctx.beginPath(); ctx.moveTo(-28, -20); ctx.lineTo(-65, -40 + wingFlap); ctx.lineTo(-40, 10); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(28, -20); ctx.lineTo(65, -40 - wingFlap); ctx.lineTo(40, 10); ctx.closePath(); ctx.fill();
+    // tail
+    ctx.strokeStyle = '#ff3333';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 40);
+    ctx.quadraticCurveTo(20 + Math.sin(animTime * 3) * 10, 60, 10, 75);
+    ctx.stroke();
+}
+
+function drawSnake(dt) {
+    ctx.fillStyle = '#44cc44';
+    // coiled body
+    const segments = 12;
+    for (let i = 0; i < segments; i++) {
+        const t = i / segments;
+        const sx = Math.sin(t * Math.PI * 3 + animTime * 2) * 25;
+        const sy = -40 + t * 90;
+        const sz = 12 - t * 4;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sz, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // head
+    ctx.fillStyle = '#55dd55';
+    ctx.beginPath();
+    ctx.ellipse(Math.sin(animTime * 2) * 10, -50, 18, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // eyes
+    ctx.fillStyle = '#ff0000';
+    const hx = Math.sin(animTime * 2) * 10;
+    ctx.beginPath(); ctx.arc(hx - 8, -54, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx + 8, -54, 3, 0, Math.PI * 2); ctx.fill();
+    // fangs
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.moveTo(hx - 4, -40); ctx.lineTo(hx - 2, -32); ctx.lineTo(hx - 6, -32); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(hx + 4, -40); ctx.lineTo(hx + 2, -32); ctx.lineTo(hx + 6, -32); ctx.closePath(); ctx.fill();
+}
+
+function drawSiren(dt) {
+    ctx.fillStyle = '#4488ff';
+    // flowing hair
+    for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        const hx = (i - 3) * 8;
+        ctx.moveTo(hx, -60);
+        ctx.quadraticCurveTo(hx + Math.sin(animTime * 2 + i) * 15, -20, hx + Math.sin(animTime * 1.5 + i) * 10, 10);
+        ctx.strokeStyle = '#6699ff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+    // head
+    ctx.fillStyle = '#88bbff';
+    ctx.beginPath(); ctx.arc(0, -50, 16, 0, Math.PI * 2); ctx.fill();
+    // eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-6, -52, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -52, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000066';
+    ctx.beginPath(); ctx.arc(-6, -52, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6, -52, 1.5, 0, Math.PI * 2); ctx.fill();
+    // body
+    ctx.fillStyle = '#4488ff';
+    ctx.beginPath();
+    ctx.moveTo(-18, -34);
+    ctx.lineTo(18, -34);
+    ctx.quadraticCurveTo(25, 10, 15, 50);
+    ctx.quadraticCurveTo(0, 60, -15, 50);
+    ctx.quadraticCurveTo(-25, 10, -18, -34);
+    ctx.closePath();
+    ctx.fill();
+    // musical notes floating around
+    ctx.fillStyle = '#88ccff';
+    ctx.font = '16px serif';
+    for (let i = 0; i < 3; i++) {
+        const nx = Math.sin(animTime + i * 2) * 40;
+        const ny = -60 + Math.cos(animTime * 1.3 + i) * 20;
+        ctx.globalAlpha = 0.5 + Math.sin(animTime + i) * 0.3;
+        ctx.fillText('\u266A', nx, ny);
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawSamurai(dt) {
+    ctx.fillStyle = '#ff8800';
+    // helmet (kabuto)
+    ctx.beginPath();
+    ctx.ellipse(0, -60, 25, 12, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(-30, -60, 60, 4);
+    // crest
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath(); ctx.moveTo(0, -72); ctx.lineTo(-5, -60); ctx.lineTo(5, -60); ctx.closePath(); ctx.fill();
+    // face
+    ctx.fillStyle = '#ff8800';
+    ctx.beginPath(); ctx.arc(0, -45, 16, 0, Math.PI * 2); ctx.fill();
+    // mask
+    ctx.fillStyle = '#cc6600';
+    ctx.beginPath();
+    ctx.moveTo(-14, -42);
+    ctx.lineTo(14, -42);
+    ctx.lineTo(10, -32);
+    ctx.lineTo(-10, -32);
+    ctx.closePath();
+    ctx.fill();
+    // eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-10, -50, 7, 3);
+    ctx.fillRect(3, -50, 7, 3);
+    // body armor
+    ctx.fillStyle = '#cc6600';
+    ctx.fillRect(-22, -28, 44, 50);
+    ctx.fillStyle = '#ff8800';
+    for (let i = 0; i < 4; i++) {
+        ctx.fillRect(-20, -25 + i * 12, 40, 8);
+    }
+    // katana
+    const swordSwing = phase === 'boss_telegraph' ? Math.sin(animTime * 10) * 0.4 : Math.sin(animTime) * 0.05;
+    ctx.save();
+    ctx.translate(30, -20);
+    ctx.rotate(0.3 + swordSwing);
+    ctx.fillStyle = '#dddddd';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 6;
+    ctx.fillRect(-1.5, -55, 3, 50);
+    ctx.fillStyle = '#884400';
+    ctx.fillRect(-4, -5, 8, 8);
+    ctx.restore();
+}
+
+function drawMonarch(dt) {
+    ctx.fillStyle = '#cc44ff';
+    // crown
+    ctx.fillStyle = '#ffdd00';
+    ctx.shadowColor = '#ffdd00';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(-20, -72);
+    ctx.lineTo(-20, -58);
+    ctx.lineTo(20, -58);
+    ctx.lineTo(20, -72);
+    ctx.lineTo(12, -62);
+    ctx.lineTo(0, -78);
+    ctx.lineTo(-12, -62);
+    ctx.closePath();
+    ctx.fill();
+    // gems on crown
+    ctx.fillStyle = '#ff0044';
+    ctx.beginPath(); ctx.arc(0, -68, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0088ff';
+    ctx.beginPath(); ctx.arc(-12, -64, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(12, -64, 2, 0, Math.PI * 2); ctx.fill();
+    // head
+    ctx.fillStyle = '#cc44ff';
+    ctx.shadowColor = '#cc44ff';
+    ctx.shadowBlur = 20;
+    ctx.beginPath(); ctx.arc(0, -45, 18, 0, Math.PI * 2); ctx.fill();
+    // eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(-7, -48, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7, -48, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#330066';
+    ctx.beginPath(); ctx.arc(-7, -48, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7, -48, 2, 0, Math.PI * 2); ctx.fill();
+    // robe
+    ctx.fillStyle = '#9933cc';
+    ctx.beginPath();
+    ctx.moveTo(-25, -27);
+    ctx.lineTo(25, -27);
+    ctx.lineTo(35, 50);
+    ctx.lineTo(-35, 50);
+    ctx.closePath();
+    ctx.fill();
+    // sash
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillRect(-25, -20, 50, 5);
+    // orb
+    ctx.save();
+    ctx.translate(-30, -10);
+    const orbPulse = 8 + Math.sin(animTime * 3) * 3;
+    const orbGlow = ctx.createRadialGradient(0, 0, 2, 0, 0, orbPulse);
+    orbGlow.addColorStop(0, '#ff88ff');
+    orbGlow.addColorStop(0.5, '#cc44ff');
+    orbGlow.addColorStop(1, 'rgba(204,68,255,0)');
+    ctx.fillStyle = orbGlow;
+    ctx.beginPath(); ctx.arc(0, 0, orbPulse, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // scepter
+    ctx.save();
+    ctx.translate(30, -15);
+    ctx.rotate(Math.sin(animTime * 0.8) * 0.1);
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillRect(-2, -40, 4, 45);
+    ctx.fillStyle = '#ff88ff';
+    ctx.beginPath(); ctx.arc(0, -42, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // floating particles around monarch
+    for (let i = 0; i < 5; i++) {
+        const angle = animTime * 0.5 + (i / 5) * Math.PI * 2;
+        const dist = 50 + Math.sin(animTime + i) * 10;
+        const px = Math.cos(angle) * dist;
+        const py = Math.sin(angle) * dist * 0.5 - 20;
+        ctx.fillStyle = '#cc44ff';
+        ctx.globalAlpha = 0.3 + Math.sin(animTime * 2 + i) * 0.2;
+        ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function drawHPBars() {
+    if (!currentBoss) return;
+    const W = canvas.width;
+    // Player HP bar
+    const pBarX = 30, pBarY = 420, pBarW = 200, pBarH = 20;
+    const pRatio = Math.max(0, playerDisplayHP / playerMaxHP);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(pBarX - 2, pBarY - 2, pBarW + 4, pBarH + 4);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(pBarX, pBarY, pBarW, pBarH);
+    const pGrad = ctx.createLinearGradient(pBarX, 0, pBarX + pBarW * pRatio, 0);
+    pGrad.addColorStop(0, pRatio > 0.3 ? '#00f5d4' : '#ff4444');
+    pGrad.addColorStop(1, pRatio > 0.3 ? '#00a090' : '#cc2222');
+    ctx.fillStyle = pGrad;
+    ctx.fillRect(pBarX, pBarY, pBarW * pRatio, pBarH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('Player: ' + Math.round(playerDisplayHP) + '/' + playerMaxHP, pBarX + pBarW / 2, pBarY + 15);
+    // Boss HP bar
+    const bBarX = W - 230, bBarY = 420, bBarW = 200, bBarH = 20;
+    const bRatio = Math.max(0, bossDisplayHP / bossMaxHP);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bBarX - 2, bBarY - 2, bBarW + 4, bBarH + 4);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(bBarX, bBarY, bBarW, bBarH);
+    const bGrad = ctx.createLinearGradient(bBarX, 0, bBarX + bBarW * bRatio, 0);
+    bGrad.addColorStop(0, currentBoss.color);
+    bGrad.addColorStop(1, '#441111');
+    ctx.fillStyle = bGrad;
+    ctx.fillRect(bBarX, bBarY, bBarW * bRatio, bBarH);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(currentBoss.name + ': ' + Math.round(bossDisplayHP) + '/' + bossMaxHP, bBarX + bBarW / 2, bBarY + 15);
+    // labels
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#00f5d4';
+    ctx.font = 'bold 14px Segoe UI';
+    ctx.fillText('PLAYER', pBarX, pBarY - 6);
+    ctx.fillStyle = currentBoss.color;
+    ctx.textAlign = 'right';
+    ctx.fillText('BOSS', bBarX + bBarW, bBarY - 6);
+    ctx.textAlign = 'left';
+    // weakness hint
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '11px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('Weakness: ' + currentBoss.weakness.toUpperCase() + ' chords', W / 2, 470);
+    ctx.textAlign = 'left';
+}
+
+function drawDefendTimer() {
+    if (phase !== 'player_defend') return;
+    const W = canvas.width;
+    const ratio = Math.max(0, defendTimer / defendTimeMax);
+    const barW = 300, barH = 12;
+    const bx = (W - barW) / 2, by = 455;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(bx, by, barW, barH);
+    const col = ratio > 0.4 ? '#ffdd00' : '#ff3333';
+    ctx.fillStyle = col;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(bx, by, barW * ratio, barH);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('PARRY TIMER: ' + defendTimer.toFixed(1) + 's', W / 2, by + 10);
+    ctx.textAlign = 'left';
+}
+
+function drawChordHint() {
+    if (phase !== 'player_attack' || !currentBoss) return;
+    const W = canvas.width;
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '12px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('Play a ' + currentBoss.weakness.toUpperCase() + ' chord for x3 damage! (Any chord deals x1)', W / 2, 490);
+    ctx.textAlign = 'left';
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+}
+
+function drawFloatingTexts() {
+    floatingTexts.forEach(ft => {
+        const alpha = Math.min(1, ft.life);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = ft.color;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.font = 'bold 22px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.textAlign = 'left';
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+}
+
+// ─── COMPUTER KEYBOARD MIDI EMULATION ───
+// Two octaves: lower row = C3-B3, upper row = C4-B4
+const KEY_MAP = {
+    'KeyA': 48, 'KeyW': 49, 'KeyS': 50, 'KeyE': 51, 'KeyD': 52,
+    'KeyF': 53, 'KeyT': 54, 'KeyG': 55, 'KeyY': 56, 'KeyH': 57,
+    'KeyU': 58, 'KeyJ': 59, 'KeyK': 60, 'KeyO': 61, 'KeyL': 62,
+    'KeyP': 63, 'Semicolon': 64, 'Quote': 65, 'BracketRight': 66,
+    'Backslash': 67,
+    // Number row for higher octave
+    'Digit1': 60, 'Digit2': 61, 'Digit3': 62, 'Digit4': 63,
+    'Digit5': 64, 'Digit6': 65, 'Digit7': 66, 'Digit8': 67,
+    'Digit9': 68, 'Digit0': 69, 'Minus': 70, 'Equal': 71
+};
+const keysHeld = new Set();
+
+document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    const note = KEY_MAP[e.code];
+    if (note !== undefined && !keysHeld.has(e.code)) {
+        keysHeld.add(e.code);
+        pressedNotes.add(note);
+        chordBuffer.add(note);
+        playPianoNote(note);
+        setLED(note, LED_COLORS.white);
+        handleNoteOn(note);
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    const note = KEY_MAP[e.code];
+    if (note !== undefined && keysHeld.has(e.code)) {
+        keysHeld.delete(e.code);
+        pressedNotes.delete(note);
+        setLED(note, LED_COLORS.off);
+        if (pressedNotes.size === 0 && chordBuffer.size > 0) {
+            handleChordRelease();
+        }
+    }
+});
+
+// ─── VICTORY / DEFEAT CANVAS DRAWING ───
+function drawVictoryScreen() {
+    if (gameState !== 'victory' || !bossDefeated) return;
+    // handled by overlay
+}
+
+function drawDefeatScreen() {
+    if (gameState !== 'defeat') return;
+    // handled by overlay
+}
+
+// ─── VIRTUAL KEYBOARD CLICK SUPPORT ───
+document.getElementById('keyboardRow').addEventListener('mousedown', (e) => {
+    const led = e.target.closest('.key-led');
+    if (!led) return;
+    const noteStr = led.id.replace('led', '');
+    const note = parseInt(noteStr);
+    if (isNaN(note)) return;
+    pressedNotes.add(note);
+    chordBuffer.add(note);
+    playPianoNote(note);
+    setLED(note, LED_COLORS.white);
+    handleNoteOn(note);
+    const upHandler = () => {
+        pressedNotes.delete(note);
+        setLED(note, LED_COLORS.off);
+        if (pressedNotes.size === 0 && chordBuffer.size > 0) {
+            handleChordRelease();
+        }
+        window.removeEventListener('mouseup', upHandler);
+    };
+    window.addEventListener('mouseup', upHandler);
+});
+
+// Make boss buttons always accessible for testing without MIDI
+document.getElementById('connectBtn').dispatchEvent; // noop reference
+// Allow starting boss 0 even without MIDI (keyboard fallback)
+setTimeout(() => {
+    const btn0 = document.getElementById('bossBtn0');
+    if (btn0) btn0.classList.remove('locked');
+}, 500);
+</script>
+</body>
+</html>

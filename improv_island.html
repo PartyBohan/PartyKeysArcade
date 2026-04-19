@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Improv Island</title>
+<style>
+:root {
+    --bg1: #0a1628;
+    --bg2: #0d2137;
+    --accent: #fbbf24;
+    --danger: #ff6b6b;
+    --text: #e0e0e0;
+    --card-bg: rgba(255,255,255,0.05);
+    --green: #22c55e;
+    --cyan: #06b6d4;
+    --spice: #f97316;
+    --flow: #3b82f6;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: linear-gradient(135deg, var(--bg1), var(--bg2));
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+#header {
+    text-align: center;
+    padding: 10px 0 4px;
+    background: linear-gradient(180deg, rgba(251,191,36,0.15), transparent);
+}
+#header h1 {
+    font-size: 2rem;
+    background: linear-gradient(90deg, #fbbf24, #f97316, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+    text-shadow: none;
+}
+#header .subtitle { font-size: 0.75rem; color: #94a3b8; margin-top: 2px; }
+#controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--card-bg);
+    border-bottom: 1px solid rgba(251,191,36,0.1);
+}
+.ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.ctrl-group label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+.ctrl-group span { font-size: 0.85rem; font-weight: 600; color: var(--accent); min-width: 30px; text-align: center; }
+button {
+    background: rgba(251,191,36,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(251,191,36,0.3);
+    padding: 5px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+button:hover { background: rgba(251,191,36,0.25); transform: translateY(-1px); }
+button.active { background: rgba(251,191,36,0.35); box-shadow: 0 0 10px rgba(251,191,36,0.3); }
+.track-btn { font-size: 0.72rem; padding: 4px 10px; }
+.track-btn.active { background: var(--accent); color: #0a1628; }
+#midi-bar {
+    text-align: center;
+    padding: 3px;
+    font-size: 0.7rem;
+    color: #64748b;
+}
+#midi-bar.connected { color: var(--green); }
+#canvas-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 6px;
+}
+canvas {
+    border-radius: 12px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+}
+#stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding: 5px;
+    flex-wrap: wrap;
+}
+.stat-item {
+    text-align: center;
+    min-width: 80px;
+}
+.stat-item .stat-label { font-size: 0.6rem; color: #64748b; text-transform: uppercase; }
+.stat-item .stat-val { font-size: 1.1rem; font-weight: 700; }
+.stat-val.chord-name { color: var(--accent); font-size: 1.3rem; }
+.stat-val.spice { color: var(--spice); }
+.stat-val.flow { color: var(--flow); }
+#keyboard-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 4px 10px 10px;
+}
+#keyboard {
+    display: flex;
+    position: relative;
+    height: 90px;
+    user-select: none;
+}
+.white-key {
+    width: 28px;
+    height: 90px;
+    background: linear-gradient(180deg, #f8f8f8, #e8e8e8);
+    border: 1px solid #999;
+    border-radius: 0 0 4px 4px;
+    cursor: pointer;
+    position: relative;
+    z-index: 1;
+    transition: background 0.1s;
+}
+.white-key:active, .white-key.pressed { background: linear-gradient(180deg, #ddd, #ccc); }
+.black-key {
+    width: 18px;
+    height: 55px;
+    background: linear-gradient(180deg, #333, #111);
+    border: 1px solid #000;
+    border-radius: 0 0 3px 3px;
+    position: absolute;
+    z-index: 2;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.black-key:active, .black-key.pressed { background: linear-gradient(180deg, #555, #333); }
+.key-led {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #333;
+    transition: background 0.15s, box-shadow 0.15s;
+}
+.black-key .key-led { bottom: 3px; width: 6px; height: 6px; }
+.key-led.green { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+.key-led.cyan { background: #06b6d4; box-shadow: 0 0 8px #06b6d4; }
+.key-led.white { background: #fff; box-shadow: 0 0 12px #fff; }
+.key-led.off { background: #333; box-shadow: none; }
+#feedback-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10,22,40,0.92);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+}
+#feedback-overlay.show { display: flex; }
+#feedback-card {
+    background: linear-gradient(135deg, #1a2a4a, #0d2137);
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 16px;
+    padding: 30px 40px;
+    text-align: center;
+    max-width: 420px;
+    box-shadow: 0 0 40px rgba(251,191,36,0.15);
+}
+#feedback-card h2 { color: var(--accent); font-size: 1.6rem; margin-bottom: 6px; }
+#feedback-card .rating { font-size: 1.2rem; margin: 10px 0; }
+#feedback-card .fb-stats { text-align: left; margin: 14px 0; }
+#feedback-card .fb-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9rem; }
+#feedback-card button { margin-top: 14px; }
+input[type=range] {
+    -webkit-appearance: none;
+    width: 70px;
+    height: 4px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div id="header">
+    <h1>Improv Island</h1>
+    <div class="subtitle">Follow the lights, find your groove, spice it up</div>
+</div>
+<div id="controls">
+    <div class="ctrl-group">
+        <label>Track</label>
+        <button class="track-btn active" data-track="jazz">Jazz</button>
+        <button class="track-btn" data-track="lofi">Lo-Fi</button>
+        <button class="track-btn" data-track="funk">Funk</button>
+        <button class="track-btn" data-track="latin">Latin</button>
+        <button class="track-btn" data-track="blues">Blues</button>
+    </div>
+    <div class="ctrl-group">
+        <label>BPM</label>
+        <span id="bpm-display">130</span>
+    </div>
+    <button id="play-btn">Play</button>
+    <button id="stop-btn">Stop</button>
+    <div class="ctrl-group">
+        <label>BGM</label>
+        <input type="range" id="bgm-vol" min="0" max="100" value="45">
+    </div>
+    <div class="ctrl-group">
+        <label>Keys</label>
+        <input type="range" id="keys-vol" min="0" max="100" value="55">
+    </div>
+    <button id="mute-btn">Mute All</button>
+</div>
+<div id="midi-bar">MIDI: Not connected. Use virtual keyboard or connect a MIDI controller.</div>
+<div id="canvas-wrap"><canvas id="canvas" width="1060" height="500"></canvas></div>
+<div id="stats-bar">
+    <div class="stat-item"><div class="stat-label">Current Chord</div><div class="stat-val chord-name" id="stat-chord">--</div></div>
+    <div class="stat-item"><div class="stat-label">Spice</div><div class="stat-val spice" id="stat-spice">0</div></div>
+    <div class="stat-item"><div class="stat-label">Flow</div><div class="stat-val flow" id="stat-flow">0</div></div>
+    <div class="stat-item"><div class="stat-label">Notes</div><div class="stat-val" id="stat-notes">0</div></div>
+    <div class="stat-item"><div class="stat-label">Time</div><div class="stat-val" id="stat-time">0:00</div></div>
+</div>
+<div id="keyboard-wrap"><div id="keyboard"></div></div>
+<div id="feedback-overlay">
+    <div id="feedback-card">
+        <h2>Session Complete</h2>
+        <div class="rating" id="fb-rating"></div>
+        <div class="fb-stats" id="fb-stats"></div>
+        <button id="fb-close">Back to Island</button>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// BACKING TRACKS
+// ============================================================
+const BACKING_TRACKS = {
+    jazz: {
+        name: 'Jazz Standard', tempo: 130, timeSignature: 4,
+        key: 'C', scale: [0,2,4,5,7,9,11],
+        progression: [
+            {chord: 'Cmaj7', root: 0, type: 'maj7', intervals: [0,4,7,11], bars: 1},
+            {chord: 'Am7', root: 9, type: 'min7', intervals: [0,3,7,10], bars: 1},
+            {chord: 'Dm7', root: 2, type: 'min7', intervals: [0,3,7,10], bars: 1},
+            {chord: 'G7', root: 7, type: '7', intervals: [0,4,7,10], bars: 1},
+        ]
+    },
+    lofi: {
+        name: 'Lo-Fi Chill', tempo: 85, timeSignature: 4,
+        key: 'F', scale: [0,2,4,5,7,9,11],
+        progression: [
+            {chord: 'Fmaj7', root: 5, type: 'maj7', intervals: [0,4,7,11], bars: 2},
+            {chord: 'Em7', root: 4, type: 'min7', intervals: [0,3,7,10], bars: 2},
+            {chord: 'Dm7', root: 2, type: 'min7', intervals: [0,3,7,10], bars: 2},
+            {chord: 'Cmaj7', root: 0, type: 'maj7', intervals: [0,4,7,11], bars: 2},
+        ]
+    },
+    funk: {
+        name: 'Funk Groove', tempo: 110, timeSignature: 4,
+        key: 'Eb', scale: [0,2,3,5,7,8,10],
+        progression: [
+            {chord: 'Eb9', root: 3, type: '7', intervals: [0,4,7,10], bars: 2},
+            {chord: 'Ab7', root: 8, type: '7', intervals: [0,4,7,10], bars: 2},
+        ]
+    },
+    latin: {
+        name: 'Latin Salsa', tempo: 95, timeSignature: 4,
+        key: 'G', scale: [0,2,4,5,7,9,11],
+        progression: [
+            {chord: 'Gmaj7', root: 7, type: 'maj7', intervals: [0,4,7,11], bars: 1},
+            {chord: 'Cmaj7', root: 0, type: 'maj7', intervals: [0,4,7,11], bars: 1},
+            {chord: 'Am7', root: 9, type: 'min7', intervals: [0,3,7,10], bars: 1},
+            {chord: 'D7', root: 2, type: '7', intervals: [0,4,7,10], bars: 1},
+        ]
+    },
+    blues: {
+        name: 'Blues Shuffle', tempo: 100, timeSignature: 4,
+        key: 'A', scale: [0,2,3,5,7,9,10],
+        progression: [
+            {chord: 'A7', root: 9, type: '7', intervals: [0,4,7,10], bars: 4},
+            {chord: 'D7', root: 2, type: '7', intervals: [0,4,7,10], bars: 2},
+            {chord: 'A7', root: 9, type: '7', intervals: [0,4,7,10], bars: 2},
+            {chord: 'E7', root: 4, type: '7', intervals: [0,4,7,10], bars: 1},
+            {chord: 'D7', root: 2, type: '7', intervals: [0,4,7,10], bars: 1},
+            {chord: 'A7', root: 9, type: '7', intervals: [0,4,7,10], bars: 2},
+        ]
+    }
+};
+
+// ============================================================
+// LED VELOCITIES
+// ============================================================
+const LED = { off: 0, red: 10, green: 30, blue: 50, yellow: 70, cyan: 90, purple: 110, white: 125 };
+
+// ============================================================
+// APP STATE
+// ============================================================
+let audioCtx = null;
+let masterGain, bgmGain, sfxGain, keysGain;
+let currentTrackId = 'jazz';
+let isPlaying = false;
+let playStartTime = 0;
+let sessionStartTime = 0;
+let beatCount = 0;
+let currentChordIndex = 0;
+let currentChord = null;
+let schedulerTimer = null;
+let nextBeatTime = 0;
+let lookAhead = 0.1;
+let scheduleInterval = 25;
+let spice = 0;
+let flow = 0;
+let totalNotes = 0;
+let chordToneCount = 0;
+let scaleToneCount = 0;
+let tensionNoteCount = 0;
+let spiceHistory = [];
+let flowHistory = [];
+let lastNoteTime = 0;
+let tensionNotes = [];
+let activeOscillators = {};
+let midiAccess = null;
+let muted = false;
+let ledStates = new Array(36).fill(0);
+let chordFlashTimeout = null;
+let noteTrail = [];
+let particles = [];
+let animFrame = null;
+let canvasCtx = null;
+let waveOffset = 0;
+let palmSwayAngle = 0;
+let starPositions = [];
+let progressionTimeline = [];
+let chordTransitionTime = 0;
+
+// ============================================================
+// AUDIO INIT
+// ============================================================
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 1.0;
+    masterGain.connect(audioCtx.destination);
+
+    bgmGain = audioCtx.createGain();
+    bgmGain.gain.value = 0.45;
+    bgmGain.connect(masterGain);
+
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.5;
+    sfxGain.connect(masterGain);
+
+    keysGain = audioCtx.createGain();
+    keysGain.gain.value = 0.55;
+    keysGain.connect(masterGain);
+}
+
+// ============================================================
+// PLAYER PIANO SYNTHESIS (5-partial)
+// ============================================================
+function playNote(midiNote, velocity) {
+    if (!audioCtx) initAudio();
+    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+    const vel = velocity / 127;
+    const partials = [
+        { ratio: 1, amp: 1.0 },
+        { ratio: 2, amp: 0.5 },
+        { ratio: 3, amp: 0.25 },
+        { ratio: 4, amp: 0.12 },
+        { ratio: 5, amp: 0.06 }
+    ];
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(vel * 0.25, audioCtx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(vel * 0.15, audioCtx.currentTime + 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+    gain.connect(keysGain);
+
+    const oscs = [];
+    partials.forEach(p => {
+        const osc = audioCtx.createOscillator();
+        const pGain = audioCtx.createGain();
+        pGain.gain.value = p.amp;
+        osc.frequency.value = freq * p.ratio;
+        osc.type = p.ratio === 1 ? 'triangle' : 'sine';
+        osc.connect(pGain);
+        pGain.connect(gain);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 2.6);
+        oscs.push(osc);
+    });
+
+    if (activeOscillators[midiNote]) {
+        activeOscillators[midiNote].gain.gain.cancelScheduledValues(audioCtx.currentTime);
+        activeOscillators[midiNote].gain.gain.setValueAtTime(activeOscillators[midiNote].gain.gain.value, audioCtx.currentTime);
+        activeOscillators[midiNote].gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+    }
+    activeOscillators[midiNote] = { oscs, gain };
+    setTimeout(() => { if (activeOscillators[midiNote] && activeOscillators[midiNote].oscs === oscs) delete activeOscillators[midiNote]; }, 2600);
+}
+
+function stopNote(midiNote) {
+    if (activeOscillators[midiNote]) {
+        const ag = activeOscillators[midiNote];
+        ag.gain.gain.cancelScheduledValues(audioCtx.currentTime);
+        ag.gain.gain.setValueAtTime(ag.gain.gain.value, audioCtx.currentTime);
+        ag.gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        delete activeOscillators[midiNote];
+    }
+}
+
+// ============================================================
+// BACKING TRACK AUDIO SYNTHESIS
+// ============================================================
+function playKick(time) {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
+    g.gain.setValueAtTime(0.7, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+    osc.connect(g);
+    g.connect(bgmGain);
+    osc.start(time);
+    osc.stop(time + 0.15);
+}
+
+function playSnare(time) {
+    const bufSize = audioCtx.sampleRate * 0.1;
+    const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const filt = audioCtx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.value = 3000;
+    filt.Q.value = 0.8;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.4, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(bgmGain);
+    src.start(time);
+
+    const osc = audioCtx.createOscillator();
+    const og = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(200, time);
+    osc.frequency.exponentialRampToValueAtTime(100, time + 0.05);
+    og.gain.setValueAtTime(0.3, time);
+    og.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+    osc.connect(og);
+    og.connect(bgmGain);
+    osc.start(time);
+    osc.stop(time + 0.1);
+}
+
+function playHiHat(time, open) {
+    const bufSize = audioCtx.sampleRate * (open ? 0.15 : 0.04);
+    const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    const decay = open ? 0.15 : 0.04;
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 3);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const filt = audioCtx.createBiquadFilter();
+    filt.type = 'highpass';
+    filt.frequency.value = 7000;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(open ? 0.2 : 0.15, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time + decay);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(bgmGain);
+    src.start(time);
+}
+
+function playBassNote(time, midiNote, duration) {
+    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+    const osc = audioCtx.createOscillator();
+    const sub = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    const filt = audioCtx.createBiquadFilter();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    sub.type = 'sine';
+    sub.frequency.value = freq / 2;
+    filt.type = 'lowpass';
+    filt.frequency.value = 400;
+    g.gain.setValueAtTime(0.35, time);
+    g.gain.setValueAtTime(0.35, time + duration - 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    osc.connect(filt);
+    sub.connect(filt);
+    filt.connect(g);
+    g.connect(bgmGain);
+    osc.start(time);
+    sub.start(time);
+    osc.stop(time + duration);
+    sub.stop(time + duration);
+}
+
+function playChordPad(time, chordObj, duration, style) {
+    const root = chordObj.root;
+    const notes = chordObj.intervals.map(i => root + i);
+    const baseOctave = 60;
+    notes.forEach((n, idx) => {
+        const freq = 440 * Math.pow(2, ((baseOctave + n) - 69) / 12);
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = style === 'lofi' ? 'triangle' : (style === 'funk' ? 'sawtooth' : 'triangle');
+        osc.frequency.value = freq;
+        const attack = style === 'lofi' ? 0.1 : 0.02;
+        const vol = style === 'funk' ? 0.06 : 0.08;
+        g.gain.setValueAtTime(0, time);
+        g.gain.linearRampToValueAtTime(vol, time + attack);
+        if (style === 'funk') {
+            g.gain.setValueAtTime(vol, time + 0.08);
+            g.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+        } else {
+            g.gain.setValueAtTime(vol, time + duration - 0.1);
+            g.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        }
+        if (style === 'funk' || style === 'sawtooth') {
+            const filt = audioCtx.createBiquadFilter();
+            filt.type = 'lowpass';
+            filt.frequency.value = 1200;
+            osc.connect(filt);
+            filt.connect(g);
+        } else {
+            osc.connect(g);
+        }
+        g.connect(bgmGain);
+        osc.start(time);
+        osc.stop(time + duration + 0.01);
+    });
+}
+
+// ============================================================
+// BEAT SCHEDULER
+// ============================================================
+function getTrack() { return BACKING_TRACKS[currentTrackId]; }
+
+function getSecondsPerBeat() { return 60 / getTrack().tempo; }
+
+function getTotalBeatsInProgression() {
+    return getTrack().progression.reduce((sum, c) => sum + c.bars * getTrack().timeSignature, 0);
+}
+
+function getChordAtBeat(beat) {
+    const track = getTrack();
+    const totalBeats = getTotalBeatsInProgression();
+    const cycleBeat = ((beat % totalBeats) + totalBeats) % totalBeats;
+    let accumulated = 0;
+    for (let i = 0; i < track.progression.length; i++) {
+        const chordBeats = track.progression[i].bars * track.timeSignature;
+        if (cycleBeat < accumulated + chordBeats) {
+            return { index: i, chord: track.progression[i], beatInChord: cycleBeat - accumulated, totalChordBeats: chordBeats };
+        }
+        accumulated += chordBeats;
+    }
+    return { index: 0, chord: track.progression[0], beatInChord: 0, totalChordBeats: track.progression[0].bars * track.timeSignature };
+}
+
+function scheduleBeat(beatNum, time) {
+    const track = getTrack();
+    const spb = getSecondsPerBeat();
+    const chordInfo = getChordAtBeat(beatNum);
+    const beatInBar = beatNum % track.timeSignature;
+
+    // Update current chord on chord change
+    if (chordInfo.beatInChord === 0) {
+        currentChordIndex = chordInfo.index;
+        currentChord = chordInfo.chord;
+        chordTransitionTime = performance.now();
+        updateLEDs(true);
+    }
+
+    // Drums
+    const style = currentTrackId;
+    if (style === 'jazz') {
+        if (beatInBar === 0) playKick(time);
+        if (beatInBar === 1 || beatInBar === 3) playSnare(time);
+        playHiHat(time, beatInBar === 2);
+        if (beatInBar === 2) playKick(time + spb * 0.66);
+    } else if (style === 'lofi') {
+        if (beatInBar === 0) playKick(time);
+        if (beatInBar === 2) { playSnare(time); playKick(time); }
+        if (beatInBar % 2 === 0) playHiHat(time, false);
+        playHiHat(time + spb * 0.5, false);
+    } else if (style === 'funk') {
+        playKick(time);
+        if (beatInBar === 0) playKick(time + spb * 0.5);
+        if (beatInBar === 1 || beatInBar === 3) playSnare(time);
+        playHiHat(time, beatInBar === 3);
+        playHiHat(time + spb * 0.5, false);
+    } else if (style === 'latin') {
+        if (beatInBar === 0 || beatInBar === 2) playKick(time);
+        if (beatInBar === 1 || beatInBar === 3) playSnare(time);
+        playHiHat(time, false);
+        if (beatInBar === 0 || beatInBar === 3) playHiHat(time + spb * 0.33, false);
+        if (beatInBar === 1) playHiHat(time + spb * 0.66, false);
+    } else if (style === 'blues') {
+        if (beatInBar === 0 || beatInBar === 2) playKick(time);
+        if (beatInBar === 1 || beatInBar === 3) playSnare(time);
+        playHiHat(time, false);
+        playHiHat(time + spb * 0.66, false);
+    }
+
+    // Bass
+    if (chordInfo.chord) {
+        const root = chordInfo.chord.root;
+        const bassNote = 36 + root; // bass octave
+        const fifth = (root + 7) % 12;
+        if (style === 'jazz') {
+            if (beatInBar === 0) playBassNote(time, bassNote, spb * 0.9);
+            if (beatInBar === 2) playBassNote(time, 36 + fifth, spb * 0.9);
+        } else if (style === 'lofi') {
+            if (beatInBar === 0) playBassNote(time, bassNote, spb * 3.8);
+        } else if (style === 'funk') {
+            if (beatInBar === 0) playBassNote(time, bassNote, spb * 0.4);
+            if (beatInBar === 0) playBassNote(time + spb * 0.5, bassNote, spb * 0.3);
+            if (beatInBar === 2) playBassNote(time, 36 + fifth, spb * 0.4);
+            if (beatInBar === 3) playBassNote(time + spb * 0.5, bassNote + 12, spb * 0.2);
+        } else if (style === 'latin') {
+            if (beatInBar === 0) playBassNote(time, bassNote, spb * 0.8);
+            if (beatInBar === 2) playBassNote(time, 36 + fifth, spb * 0.8);
+            if (beatInBar === 3) playBassNote(time + spb * 0.5, bassNote + 12, spb * 0.3);
+        } else if (style === 'blues') {
+            if (beatInBar === 0) playBassNote(time, bassNote, spb * 0.6);
+            if (beatInBar === 1) playBassNote(time + spb * 0.66, 36 + fifth, spb * 0.3);
+            if (beatInBar === 2) playBassNote(time, bassNote, spb * 0.6);
+            if (beatInBar === 3) playBassNote(time + spb * 0.66, bassNote - 1, spb * 0.3);
+        }
+    }
+
+    // Chord comping
+    if (chordInfo.chord) {
+        if (style === 'jazz') {
+            if (beatInBar === 1 || beatInBar === 3) playChordPad(time, chordInfo.chord, spb * 0.8, 'jazz');
+        } else if (style === 'lofi') {
+            if (chordInfo.beatInChord === 0) playChordPad(time, chordInfo.chord, spb * chordInfo.totalChordBeats * 0.95, 'lofi');
+        } else if (style === 'funk') {
+            if (beatInBar === 0) playChordPad(time, chordInfo.chord, spb * 0.15, 'funk');
+            if (beatInBar === 0) playChordPad(time + spb * 0.5, chordInfo.chord, spb * 0.15, 'funk');
+            if (beatInBar === 2) playChordPad(time, chordInfo.chord, spb * 0.15, 'funk');
+        } else if (style === 'latin') {
+            if (beatInBar === 0 || beatInBar === 2) playChordPad(time, chordInfo.chord, spb * 1.5, 'jazz');
+        } else if (style === 'blues') {
+            if (beatInBar === 0) playChordPad(time, chordInfo.chord, spb * 1.8, 'jazz');
+            if (beatInBar === 2) playChordPad(time + spb * 0.66, chordInfo.chord, spb * 0.8, 'jazz');
+        }
+    }
+}
+
+function scheduler() {
+    while (nextBeatTime < audioCtx.currentTime + lookAhead) {
+        scheduleBeat(beatCount, nextBeatTime);
+        nextBeatTime += getSecondsPerBeat();
+        beatCount++;
+    }
+}
+
+// ============================================================
+// LED SYSTEM (CORE FEATURE)
+// ============================================================
+function classifyNote(midiNote) {
+    // Returns: 'chord', 'scale', 'tension'
+    if (!currentChord) return 'tension';
+    const track = getTrack();
+    const pc = midiNote % 12;
+    const chordTones = currentChord.intervals.map(i => (currentChord.root + i) % 12);
+    if (chordTones.includes(pc)) return 'chord';
+    const scaleTones = track.scale.map(s => (s) % 12); // scale is absolute pitch classes
+    // Scale is relative to key, need to offset
+    const keyOffset = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11, 'Eb': 3, 'Bb': 10 }[track.key] || 0;
+    const absScale = track.scale.map(s => (s + keyOffset) % 12);
+    if (absScale.includes(pc)) return 'scale';
+    return 'tension';
+}
+
+function updateLEDs(flash) {
+    const keys = document.querySelectorAll('.piano-key');
+    for (let i = 0; i < 36; i++) {
+        const midiNote = 48 + i;
+        const cat = classifyNote(midiNote);
+        let ledClass = 'off';
+        if (cat === 'chord') ledClass = flash ? 'white' : 'green';
+        else if (cat === 'scale') ledClass = 'cyan';
+        else ledClass = 'off';
+        ledStates[i] = cat === 'chord' ? LED.green : (cat === 'scale' ? LED.cyan : LED.off);
+        const key = keys[i];
+        if (key) {
+            const led = key.querySelector('.key-led');
+            if (led) {
+                led.className = 'key-led ' + ledClass;
+            }
+        }
+    }
+    // Flash white for 200ms then settle
+    if (flash) {
+        if (chordFlashTimeout) clearTimeout(chordFlashTimeout);
+        chordFlashTimeout = setTimeout(() => updateLEDs(false), 200);
+    }
+    // Send LED to MIDI if available
+    sendLEDsToMIDI();
+}
+
+function sendLEDsToMIDI() {
+    if (!midiAccess) return;
+    midiAccess.outputs.forEach(output => {
+        for (let i = 0; i < 36; i++) {
+            const note = 48 + i;
+            const vel = ledStates[i];
+            output.send([0x90, note, vel]);
+        }
+    });
+}
+
+// ============================================================
+// SPICE & FLOW METERS
+// ============================================================
+function handleNoteForMetrics(midiNote) {
+    const cat = classifyNote(midiNote);
+    totalNotes++;
+    const now = performance.now();
+
+    if (cat === 'chord') {
+        chordToneCount++;
+        // Resolve tension
+        const resolved = tensionNotes.filter(t => now - t.time < getSecondsPerBeat() * 2 * 1000);
+        if (resolved.length > 0) {
+            spice = Math.min(100, spice + resolved.length * 8);
+        }
+        tensionNotes = tensionNotes.filter(t => now - t.time >= getSecondsPerBeat() * 2 * 1000);
+    } else if (cat === 'scale') {
+        scaleToneCount++;
+        spice = Math.max(0, spice - 0.5);
+    } else {
+        tensionNoteCount++;
+        tensionNotes.push({ note: midiNote, time: now });
+    }
+
+    // Decay unresolved tensions
+    const expired = tensionNotes.filter(t => now - t.time > getSecondsPerBeat() * 2 * 1000);
+    if (expired.length > 0) {
+        spice = Math.max(0, spice - expired.length * 4);
+        tensionNotes = tensionNotes.filter(t => now - t.time <= getSecondsPerBeat() * 2 * 1000);
+    }
+
+    // Flow meter
+    const gap = now - lastNoteTime;
+    const idealMin = getSecondsPerBeat() * 250;
+    const idealMax = getSecondsPerBeat() * 4 * 1000;
+    if (gap > idealMin && gap < idealMax) {
+        flow = Math.min(100, flow + 3);
+    } else if (gap < idealMin * 0.3) {
+        flow = Math.max(0, flow - 2);
+    }
+    lastNoteTime = now;
+
+    spiceHistory.push(spice);
+    flowHistory.push(flow);
+
+    // Note trail
+    const colors = { chord: '#22c55e', scale: '#06b6d4', tension: '#ff6b6b' };
+    noteTrail.push({ note: midiNote, time: now, color: colors[cat], cat });
+
+    // Particles
+    const keyIdx = midiNote - 48;
+    if (keyIdx >= 0 && keyIdx < 36) {
+        for (let p = 0; p < 3; p++) {
+            particles.push({
+                x: 80 + (keyIdx / 36) * 900,
+                y: 420,
+                vx: (Math.random() - 0.5) * 3,
+                vy: -2 - Math.random() * 3,
+                life: 1,
+                color: colors[cat],
+                size: 3 + Math.random() * 4,
+                symbol: ['%', '#', 'b', 'n'][Math.floor(Math.random() * 4)]
+            });
+        }
+    }
+}
+
+function decayMeters() {
+    const now = performance.now();
+    if (now - lastNoteTime > getSecondsPerBeat() * 6 * 1000 && isPlaying) {
+        flow = Math.max(0, flow - 0.15);
+    }
+    spice = Math.max(0, spice - 0.03);
+}
+
+// ============================================================
+// MIDI
+// ============================================================
+function initMIDI() {
+    if (navigator.requestMIDIAccess) {
+        navigator.requestMIDIAccess({ sysex: false }).then(access => {
+            midiAccess = access;
+            const midiBar = document.getElementById('midi-bar');
+            const inputs = [];
+            access.inputs.forEach(input => {
+                inputs.push(input.name);
+                input.onmidimessage = handleMIDI;
+            });
+            if (inputs.length > 0) {
+                midiBar.textContent = 'MIDI: ' + inputs.join(', ');
+                midiBar.className = 'connected';
+            }
+            access.onstatechange = () => {
+                access.inputs.forEach(input => { input.onmidimessage = handleMIDI; });
+            };
+        }).catch(() => {});
+    }
+}
+
+function handleMIDI(msg) {
+    const [status, note, vel] = msg.data;
+    const cmd = status & 0xF0;
+    if (cmd === 0x90 && vel > 0) {
+        onNoteOn(note, vel);
+    } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
+        onNoteOff(note);
+    }
+}
+
+function onNoteOn(note, vel) {
+    if (!audioCtx) initAudio();
+    if (note < 48 || note > 83) return;
+    playNote(note, vel);
+    handleNoteForMetrics(note);
+    highlightKey(note, true);
+}
+
+function onNoteOff(note) {
+    if (note < 48 || note > 83) return;
+    stopNote(note);
+    highlightKey(note, false);
+}
+
+function highlightKey(note, on) {
+    const idx = note - 48;
+    const keys = document.querySelectorAll('.piano-key');
+    if (keys[idx]) {
+        if (on) keys[idx].classList.add('pressed');
+        else keys[idx].classList.remove('pressed');
+    }
+}
+
+// ============================================================
+// VIRTUAL KEYBOARD
+// ============================================================
+function buildKeyboard() {
+    const kb = document.getElementById('keyboard');
+    kb.innerHTML = '';
+    const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const isBlack = [0,1,0,1,0,0,1,0,1,0,1,0];
+    let whiteIdx = 0;
+
+    // Create all keys first, position blacks on top
+    const whiteKeys = [];
+    const blackKeys = [];
+
+    for (let i = 0; i < 36; i++) {
+        const midiNote = 48 + i;
+        const pc = midiNote % 12;
+        const key = document.createElement('div');
+        key.className = 'piano-key ' + (isBlack[pc] ? 'black-key' : 'white-key');
+        key.dataset.note = midiNote;
+        key.dataset.index = i;
+        const led = document.createElement('div');
+        led.className = 'key-led off';
+        key.appendChild(led);
+
+        key.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            onNoteOn(midiNote, 100);
+        });
+        key.addEventListener('mouseup', (e) => { e.preventDefault(); onNoteOff(midiNote); });
+        key.addEventListener('mouseleave', (e) => { onNoteOff(midiNote); });
+        key.addEventListener('touchstart', (e) => { e.preventDefault(); onNoteOn(midiNote, 100); });
+        key.addEventListener('touchend', (e) => { e.preventDefault(); onNoteOff(midiNote); });
+
+        if (isBlack[pc]) {
+            blackKeys.push({ el: key, whitePos: whiteIdx });
+        } else {
+            whiteKeys.push(key);
+            whiteIdx++;
+        }
+    }
+
+    // Append whites first
+    whiteKeys.forEach(k => kb.appendChild(k));
+
+    // Position and append blacks
+    const whiteWidth = 28;
+    blackKeys.forEach(bk => {
+        bk.el.style.left = (bk.whitePos * whiteWidth - 9) + 'px';
+        kb.appendChild(bk.el);
+    });
+
+    kb.style.width = (whiteKeys.length * whiteWidth) + 'px';
+}
+
+// ============================================================
+// CANVAS RENDERING
+// ============================================================
+function initCanvas() {
+    const canvas = document.getElementById('canvas');
+    canvasCtx = canvas.getContext('2d');
+    // Generate stars
+    for (let i = 0; i < 60; i++) {
+        starPositions.push({
+            x: Math.random() * 1060,
+            y: Math.random() * 200,
+            size: Math.random() * 2 + 0.5,
+            twinkle: Math.random() * Math.PI * 2
+        });
+    }
+}
+
+function drawScene() {
+    const ctx = canvasCtx;
+    const W = 1060, H = 500;
+    const now = performance.now();
+
+    // Sky gradient (sunset)
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H * 0.65);
+    skyGrad.addColorStop(0, '#0b1a3a');
+    skyGrad.addColorStop(0.3, '#1a1040');
+    skyGrad.addColorStop(0.5, '#4a1942');
+    skyGrad.addColorStop(0.7, '#c2512a');
+    skyGrad.addColorStop(1, '#f5a623');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Stars
+    starPositions.forEach(s => {
+        const alpha = 0.3 + 0.7 * Math.abs(Math.sin(now * 0.001 + s.twinkle));
+        ctx.fillStyle = `rgba(255,255,220,${alpha})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Sun/moon
+    const sunGrad = ctx.createRadialGradient(530, 250, 10, 530, 250, 80);
+    sunGrad.addColorStop(0, 'rgba(255,200,80,0.6)');
+    sunGrad.addColorStop(0.5, 'rgba(255,150,50,0.2)');
+    sunGrad.addColorStop(1, 'rgba(255,100,30,0)');
+    ctx.fillStyle = sunGrad;
+    ctx.beginPath();
+    ctx.arc(530, 250, 80, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ocean
+    const oceanY = H * 0.65;
+    const oceanGrad = ctx.createLinearGradient(0, oceanY, 0, H);
+    oceanGrad.addColorStop(0, '#1a4a6a');
+    oceanGrad.addColorStop(0.5, '#0d3050');
+    oceanGrad.addColorStop(1, '#0a2040');
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, oceanY, W, H - oceanY);
+
+    // Waves
+    waveOffset += 0.02;
+    for (let layer = 0; layer < 3; layer++) {
+        ctx.beginPath();
+        ctx.moveTo(0, oceanY + layer * 15);
+        for (let x = 0; x <= W; x += 5) {
+            const y = oceanY + layer * 15 + Math.sin(x * 0.01 + waveOffset + layer * 1.5) * 6 +
+                      Math.sin(x * 0.025 + waveOffset * 1.5 + layer) * 3;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(20,80,${120 + layer * 20},${0.25 - layer * 0.05})`;
+        ctx.fill();
+    }
+
+    // Island
+    ctx.beginPath();
+    ctx.moveTo(350, oceanY + 10);
+    ctx.quadraticCurveTo(530, oceanY - 50, 710, oceanY + 10);
+    ctx.quadraticCurveTo(530, oceanY + 35, 350, oceanY + 10);
+    ctx.fillStyle = '#c4a050';
+    ctx.fill();
+    ctx.fillStyle = '#2a7a2a';
+    ctx.beginPath();
+    ctx.moveTo(380, oceanY - 2);
+    ctx.quadraticCurveTo(530, oceanY - 40, 680, oceanY - 2);
+    ctx.quadraticCurveTo(530, oceanY + 10, 380, oceanY - 2);
+    ctx.fill();
+
+    // Palm trees
+    palmSwayAngle = Math.sin(now * 0.0015) * 0.08;
+    drawPalmTree(ctx, 420, oceanY - 15, 100, palmSwayAngle);
+    drawPalmTree(ctx, 640, oceanY - 10, 90, -palmSwayAngle * 0.8);
+    drawPalmTree(ctx, 500, oceanY - 25, 110, palmSwayAngle * 0.6);
+
+    // Chord progression timeline at top
+    drawChordTimeline(ctx, W, now);
+
+    // Current chord name
+    if (currentChord && isPlaying) {
+        ctx.save();
+        ctx.font = 'bold 42px "Segoe UI", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        const glow = 0.6 + 0.4 * Math.sin(now * 0.003);
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 20 * glow;
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(currentChord.chord, 530, 180);
+        ctx.shadowBlur = 0;
+        ctx.font = '14px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(getTrack().name + ' - ' + getTrack().tempo + ' BPM', 530, 205);
+        ctx.restore();
+    } else if (!isPlaying) {
+        ctx.save();
+        ctx.font = 'bold 28px "Segoe UI", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(251,191,36,0.5)';
+        ctx.fillText('Press Play to Begin', 530, 185);
+        ctx.restore();
+    }
+
+    // Spice meter (left)
+    drawMeter(ctx, 35, 100, 30, 220, spice, 'SPICE', '#f97316', '#ff4444', now);
+
+    // Flow meter (right)
+    drawMeter(ctx, 995, 100, 30, 220, flow, 'FLOW', '#3b82f6', '#22d3ee', now);
+
+    // Note trail
+    drawNoteTrail(ctx, now);
+
+    // Particles
+    drawParticles(ctx, now);
+
+    // Update stats
+    decayMeters();
+    updateStatsUI();
+}
+
+function drawPalmTree(ctx, x, y, height, sway) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(sway);
+    // Trunk
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.quadraticCurveTo(-2, -height * 0.5, 2, -height);
+    ctx.quadraticCurveTo(6, -height * 0.5, 4, 0);
+    ctx.fillStyle = '#6b4226';
+    ctx.fill();
+    // Fronds
+    const frondY = -height;
+    for (let i = 0; i < 7; i++) {
+        const angle = (i / 7) * Math.PI * 2 - Math.PI * 0.5;
+        ctx.save();
+        ctx.translate(0, frondY);
+        ctx.rotate(angle + sway * 2);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(20, -10, 50, -5);
+        ctx.quadraticCurveTo(20, 5, 0, 0);
+        ctx.fillStyle = '#1a8a1a';
+        ctx.fill();
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
+function drawMeter(ctx, x, y, w, h, value, label, color1, color2, now) {
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 6);
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Fill
+    const fillH = (value / 100) * (h - 6);
+    const grad = ctx.createLinearGradient(x, y + h, x, y + h - fillH);
+    grad.addColorStop(0, color1);
+    grad.addColorStop(1, color2);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x + 3, y + h - 3 - fillH, w - 6, fillH, 3);
+    ctx.fill();
+    // Glow
+    if (value > 50) {
+        const glow = 0.3 + 0.2 * Math.sin(now * 0.005);
+        ctx.shadowColor = color1;
+        ctx.shadowBlur = 15 * glow;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+    // Label
+    ctx.font = 'bold 9px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(label, x + w / 2, y + h + 14);
+    ctx.font = 'bold 14px "Segoe UI", sans-serif';
+    ctx.fillStyle = color1;
+    ctx.fillText(Math.round(value), x + w / 2, y - 6);
+}
+
+function drawChordTimeline(ctx, W, now) {
+    if (!isPlaying) return;
+    const track = getTrack();
+    const prog = track.progression;
+    const totalBeats = getTotalBeatsInProgression();
+    const currentBeatInCycle = (beatCount % totalBeats + totalBeats) % totalBeats;
+
+    const tlY = 35;
+    const tlH = 28;
+    const tlX = 80;
+    const tlW = W - 160;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.roundRect(tlX, tlY, tlW, tlH, 6);
+    ctx.fill();
+
+    let accBeats = 0;
+    for (let i = 0; i < prog.length; i++) {
+        const chordBeats = prog[i].bars * track.timeSignature;
+        const startX = tlX + (accBeats / totalBeats) * tlW;
+        const cWidth = (chordBeats / totalBeats) * tlW;
+        const isCurrent = i === currentChordIndex;
+
+        ctx.fillStyle = isCurrent ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.05)';
+        ctx.beginPath();
+        ctx.roundRect(startX + 1, tlY + 1, cWidth - 2, tlH - 2, 4);
+        ctx.fill();
+
+        if (isCurrent) {
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Progress within chord
+            const chordInfo = getChordAtBeat(currentBeatInCycle);
+            const progress = chordInfo.beatInChord / chordInfo.totalChordBeats;
+            ctx.fillStyle = 'rgba(251,191,36,0.15)';
+            ctx.beginPath();
+            ctx.roundRect(startX + 2, tlY + 2, (cWidth - 4) * progress, tlH - 4, 3);
+            ctx.fill();
+        }
+
+        ctx.font = isCurrent ? 'bold 12px "Segoe UI", sans-serif' : '11px "Segoe UI", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isCurrent ? '#fbbf24' : '#94a3b8';
+        ctx.fillText(prog[i].chord, startX + cWidth / 2, tlY + tlH / 2 + 4);
+
+        accBeats += chordBeats;
+    }
+}
+
+function drawNoteTrail(ctx, now) {
+    // Keep last 40 notes
+    noteTrail = noteTrail.filter(n => now - n.time < 8000);
+    const trailY = 410;
+    noteTrail.forEach(n => {
+        const age = (now - n.time) / 8000;
+        const alpha = 1 - age;
+        const x = 80 + ((n.note - 48) / 36) * 900;
+        const y = trailY - age * 180;
+        ctx.fillStyle = n.color.replace(')', `,${alpha * 0.7})`).replace('rgb', 'rgba');
+        ctx.beginPath();
+        ctx.arc(x, y, 4 + (1 - age) * 3, 0, Math.PI * 2);
+        ctx.fill();
+        // Trail line
+        if (alpha > 0.1) {
+            ctx.strokeStyle = n.color.replace(')', `,${alpha * 0.3})`).replace('rgb', 'rgba');
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, y + 5);
+            ctx.lineTo(x, trailY);
+            ctx.stroke();
+        }
+    });
+}
+
+function drawParticles(ctx, now) {
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.02;
+        p.life -= 0.012;
+        ctx.font = `${p.size * 2}px "Segoe UI", sans-serif`;
+        ctx.fillStyle = p.color.replace(')', `,${p.life})`).replace('rgb', 'rgba');
+        // Convert hex to rgba for particles
+        if (p.color.startsWith('#')) {
+            const r = parseInt(p.color.slice(1,3), 16);
+            const g = parseInt(p.color.slice(3,5), 16);
+            const b = parseInt(p.color.slice(5,7), 16);
+            ctx.fillStyle = `rgba(${r},${g},${b},${p.life})`;
+        }
+        ctx.fillText(p.symbol, p.x, p.y);
+    });
+}
+
+function updateStatsUI() {
+    document.getElementById('stat-chord').textContent = currentChord ? currentChord.chord : '--';
+    document.getElementById('stat-spice').textContent = Math.round(spice);
+    document.getElementById('stat-flow').textContent = Math.round(flow);
+    document.getElementById('stat-notes').textContent = totalNotes;
+    if (isPlaying) {
+        const elapsed = Math.floor((performance.now() - sessionStartTime) / 1000);
+        const min = Math.floor(elapsed / 60);
+        const sec = elapsed % 60;
+        document.getElementById('stat-time').textContent = min + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+}
+
+function animate() {
+    drawScene();
+    animFrame = requestAnimationFrame(animate);
+}
+
+// ============================================================
+// PLAY/STOP CONTROLS
+// ============================================================
+function startPlaying() {
+    if (isPlaying) return;
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    isPlaying = true;
+    beatCount = 0;
+    currentChordIndex = 0;
+    currentChord = getTrack().progression[0];
+    nextBeatTime = audioCtx.currentTime + 0.05;
+    sessionStartTime = performance.now();
+    playStartTime = audioCtx.currentTime;
+    totalNotes = 0;
+    chordToneCount = 0;
+    scaleToneCount = 0;
+    tensionNoteCount = 0;
+    spice = 0;
+    flow = 0;
+    spiceHistory = [];
+    flowHistory = [];
+    tensionNotes = [];
+    noteTrail = [];
+    particles = [];
+    lastNoteTime = performance.now();
+    updateLEDs(true);
+    schedulerTimer = setInterval(scheduler, scheduleInterval);
+    document.getElementById('play-btn').classList.add('active');
+}
+
+function stopPlaying() {
+    if (!isPlaying) return;
+    isPlaying = false;
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+    currentChord = null;
+    document.getElementById('play-btn').classList.remove('active');
+    // Clear LEDs
+    const keys = document.querySelectorAll('.piano-key .key-led');
+    keys.forEach(led => led.className = 'key-led off');
+    ledStates.fill(0);
+    sendLEDsToMIDI();
+    // Show feedback if notes were played
+    if (totalNotes > 5) showFeedback();
+}
+
+function showFeedback() {
+    const overlay = document.getElementById('feedback-overlay');
+    const total = chordToneCount + scaleToneCount + tensionNoteCount;
+    const chordPct = total > 0 ? Math.round(chordToneCount / total * 100) : 0;
+    const scalePct = total > 0 ? Math.round(scaleToneCount / total * 100) : 0;
+    const tensionPct = total > 0 ? Math.round(tensionNoteCount / total * 100) : 0;
+    const avgSpice = spiceHistory.length > 0 ? Math.round(spiceHistory.reduce((a, b) => a + b, 0) / spiceHistory.length) : 0;
+    const avgFlow = flowHistory.length > 0 ? Math.round(flowHistory.reduce((a, b) => a + b, 0) / flowHistory.length) : 0;
+    const score = avgSpice + avgFlow;
+
+    let rating, ratingColor;
+    if (score >= 140) { rating = 'Jazz Legend'; ratingColor = '#fbbf24'; }
+    else if (score >= 100) { rating = 'Groove Master'; ratingColor = '#22c55e'; }
+    else if (score >= 60) { rating = 'Islander'; ratingColor = '#06b6d4'; }
+    else { rating = 'Tourist'; ratingColor = '#94a3b8'; }
+
+    document.getElementById('fb-rating').innerHTML = `<span style="color:${ratingColor};font-size:1.5rem">${rating}</span>`;
+    const elapsed = Math.floor((performance.now() - sessionStartTime) / 1000);
+    const min = Math.floor(elapsed / 60);
+    const sec = elapsed % 60;
+    document.getElementById('fb-stats').innerHTML = `
+        <div class="fb-row"><span>Total Notes</span><span>${totalNotes}</span></div>
+        <div class="fb-row"><span>Session Time</span><span>${min}:${sec < 10 ? '0' : ''}${sec}</span></div>
+        <div class="fb-row"><span style="color:#22c55e">Chord Tones</span><span>${chordPct}%</span></div>
+        <div class="fb-row"><span style="color:#06b6d4">Scale Tones</span><span>${scalePct}%</span></div>
+        <div class="fb-row"><span style="color:#ff6b6b">Tension Notes</span><span>${tensionPct}%</span></div>
+        <div class="fb-row"><span style="color:#f97316">Avg Spice</span><span>${avgSpice}</span></div>
+        <div class="fb-row"><span style="color:#3b82f6">Avg Flow</span><span>${avgFlow}</span></div>
+    `;
+    overlay.classList.add('show');
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+document.getElementById('play-btn').addEventListener('click', startPlaying);
+document.getElementById('stop-btn').addEventListener('click', stopPlaying);
+document.getElementById('fb-close').addEventListener('click', () => {
+    document.getElementById('feedback-overlay').classList.remove('show');
+});
+
+document.querySelectorAll('.track-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const wasPlaying = isPlaying;
+        if (wasPlaying) stopPlaying();
+        document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTrackId = btn.dataset.track;
+        document.getElementById('bpm-display').textContent = getTrack().tempo;
+        document.getElementById('feedback-overlay').classList.remove('show');
+        if (wasPlaying) startPlaying();
+    });
+});
+
+document.getElementById('bgm-vol').addEventListener('input', (e) => {
+    if (bgmGain) bgmGain.gain.value = e.target.value / 100;
+});
+document.getElementById('keys-vol').addEventListener('input', (e) => {
+    if (keysGain) keysGain.gain.value = e.target.value / 100;
+});
+document.getElementById('mute-btn').addEventListener('click', () => {
+    muted = !muted;
+    if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+    document.getElementById('mute-btn').textContent = muted ? 'Unmute' : 'Mute All';
+    document.getElementById('mute-btn').classList.toggle('active', muted);
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === ' ') { e.preventDefault(); isPlaying ? stopPlaying() : startPlaying(); }
+    if (e.key === 'Escape') stopPlaying();
+    const trackMap = { '1': 'jazz', '2': 'lofi', '3': 'funk', '4': 'latin', '5': 'blues' };
+    if (trackMap[e.key]) {
+        document.querySelector(`.track-btn[data-track="${trackMap[e.key]}"]`).click();
+    }
+
+    // Computer keyboard piano mapping (Z row = C3, A row = C4, Q row = C5)
+    const keyMap = {
+        'z': 48, 's': 49, 'x': 50, 'd': 51, 'c': 52, 'v': 53, 'g': 54,
+        'b': 55, 'h': 56, 'n': 57, 'j': 58, 'm': 59,
+        'q': 60, '2': 61, 'w': 62, '3': 63, 'e': 64, 'r': 65, '5': 66,
+        't': 67, '6': 68, 'y': 69, '7': 70, 'u': 71,
+        'i': 72, '9': 73, 'o': 74, '0': 75, 'p': 76
+    };
+    // Avoid interfering with track number shortcuts when not in range
+    if (keyMap[e.key.toLowerCase()] !== undefined && !e.repeat) {
+        // Don't trigger piano for 1-5 (track select) or 6-0 that overlap
+        const note = keyMap[e.key.toLowerCase()];
+        if (note !== undefined && !['1','2','3','4','5'].includes(e.key)) {
+            onNoteOn(note, 90);
+        }
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    const keyMap = {
+        'z': 48, 's': 49, 'x': 50, 'd': 51, 'c': 52, 'v': 53, 'g': 54,
+        'b': 55, 'h': 56, 'n': 57, 'j': 58, 'm': 59,
+        'q': 60, '2': 61, 'w': 62, '3': 63, 'e': 64, 'r': 65, '5': 66,
+        't': 67, '6': 68, 'y': 69, '7': 70, 'u': 71,
+        'i': 72, '9': 73, 'o': 74, '0': 75, 'p': 76
+    };
+    const note = keyMap[e.key.toLowerCase()];
+    if (note !== undefined) onNoteOff(note);
+});
+
+// roundRect polyfill (must run before any canvas drawing)
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        if (typeof r === 'number') r = [r, r, r, r];
+        this.moveTo(x + r[0], y);
+        this.arcTo(x + w, y, x + w, y + h, r[1]);
+        this.arcTo(x + w, y + h, x, y + h, r[2]);
+        this.arcTo(x, y + h, x, y, r[3]);
+        this.arcTo(x, y, x + w, y, r[0]);
+    };
+}
+
+// ============================================================
+// INIT
+// ============================================================
+buildKeyboard();
+initCanvas();
+initMIDI();
+animate();
+document.getElementById('bpm-display').textContent = getTrack().tempo;
+</script>
+</body>
+</html>
