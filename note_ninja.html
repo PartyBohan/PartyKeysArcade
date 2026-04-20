@@ -495,6 +495,9 @@ function update(){
 
     const speedMul = (game.powerUp === 'slowmo') ? 0.4 : (game.powerUp === 'freeze' ? 0 : 1);
 
+    // Track which MIDI notes need LEDs this frame
+    const litNotes = new Set();
+
     // Update notes
     for(let i=game.notes.length-1;i>=0;i--){
         const n = game.notes[i];
@@ -507,6 +510,12 @@ function update(){
         n.y += n.vy * speedMul;
         n.vy += 0.05 * speedMul; // gravity
         n.rot += n.rotSpeed * speedMul;
+
+        // LED hint: light target notes that are on screen (not bombs, not power-ups)
+        if(!n.bomb && !n.power && n.x > -30 && n.x < canvas.width + 30 && n.y > -30 && n.y < canvas.height + 30){
+            litNotes.add(n.midi);
+        }
+
         // Off-screen = miss
         if(n.x < -60 || n.y > canvas.height + 60 || n.x > canvas.width + 100){
             if(!n.bomb){
@@ -522,6 +531,18 @@ function update(){
             updateStats();
         }
     }
+
+    // Update LEDs: light notes that are on screen, turn off ones that left
+    if(!game._prevLit) game._prevLit = new Set();
+    // Turn off LEDs no longer needed
+    for(const m of game._prevLit){
+        if(!litNotes.has(m)){ setLED(m, 'off'); clearVirtualKey(m); }
+    }
+    // Turn on new LEDs
+    for(const m of litNotes){
+        if(!game._prevLit.has(m)){ setLED(m, 'cyan'); highlightVirtualKey(m, 'led-hint'); }
+    }
+    game._prevLit = litNotes;
 
     // Particles
     for(let i=game.particles.length-1;i>=0;i--){
