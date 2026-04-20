@@ -437,10 +437,10 @@ function populateMIDI() {
 }
 
 function pickInput(id) {
-    if (midiIn) midiIn.onmidimessage = null;
+    // Attach handler to ALL inputs (support multiple devices)
+    midiAccess.inputs.forEach(inp => { inp.onmidimessage = onMIDI; });
     midiIn = id ? midiAccess.inputs.get(id) : null;
     if (midiIn) {
-        midiIn.onmidimessage = onMIDI;
         document.getElementById('midiDot').classList.add('connected');
         document.getElementById('midiStatus').textContent = 'MIDI: ' + midiIn.name;
     } else {

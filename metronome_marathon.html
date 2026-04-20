@@ -704,7 +704,7 @@ async function connectMIDI() {
             input.onmidimessage = handleMIDIMessage;
             midiInputConnected = true;
         });
-        midiAccess.outputs.forEach(output => { if (!midiOutput) midiOutput = output; });
+        midiAccess.outputs.forEach(output => { if (!midiOutput || /partykey/i.test(output.name)) midiOutput = output; });
 
         updateMIDIStatus();
 

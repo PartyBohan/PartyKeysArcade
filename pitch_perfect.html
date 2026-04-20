@@ -603,11 +603,13 @@ async function initMIDI() {
 
 function scanMIDI() {
     midiInput = null; midiOutput = null;
+    // Attach handler to ALL inputs, prefer PartyKeys for display
     for (const input of midiAccess.inputs.values()) {
-        if (!midiInput) { midiInput = input; midiInput.onmidimessage = onMIDIMessage; }
+        input.onmidimessage = onMIDIMessage;
+        if (!midiInput || /partykey/i.test(input.name)) midiInput = input;
     }
     for (const output of midiAccess.outputs.values()) {
-        if (!midiOutput) midiOutput = output;
+        if (!midiOutput || /partykey/i.test(output.name)) midiOutput = output;
     }
     const dot = document.getElementById('midiDot');
     const status = document.getElementById('midiStatus');

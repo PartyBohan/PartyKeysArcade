@@ -279,11 +279,16 @@ function playPowerUpSound(){
 async function connectMIDI(){
     try{
         midiAccess = await navigator.requestMIDIAccess({sysex:true});
+        // Attach handler to ALL inputs (support multiple MIDI devices)
         let input=null, output=null;
-        for(const i of midiAccess.inputs.values()){ input=i; break; }
-        for(const o of midiAccess.outputs.values()){ output=o; break; }
+        midiAccess.inputs.forEach(i => {
+            i.onmidimessage = onMIDIMessage;
+            if(!input || /partykey/i.test(i.name)) input = i;
+        });
+        midiAccess.outputs.forEach(o => {
+            if(!output || /partykey/i.test(o.name)) output = o;
+        });
         if(input){
-            input.onmidimessage = onMIDIMessage;
             document.getElementById('statusDot').classList.add('live');
             document.getElementById('midiStatusText').textContent = 'MIDI connected';
             document.getElementById('deviceName').textContent = input.name;

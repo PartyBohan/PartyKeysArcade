@@ -403,14 +403,11 @@ function updateMIDIDevices() {
   if (!midiAccess) return;
   // Input
   let foundInput = false;
+  // Attach handler to ALL inputs (support multiple devices)
   for (const inp of midiAccess.inputs.values()) {
-    if (!midiInput || midiInput.id !== inp.id) {
-      if (midiInput) midiInput.onmidimessage = null;
-      midiInput = inp;
-      midiInput.onmidimessage = onMIDIMessage;
-    }
+    inp.onmidimessage = onMIDIMessage;
+    if (!midiInput || /partykey/i.test(inp.name)) midiInput = inp;
     foundInput = true;
-    break;
   }
   // Output select
   const sel = document.getElementById('midiOutSelect');

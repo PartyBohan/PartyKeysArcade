@@ -234,12 +234,15 @@ let quizPlayed = false;
 // ===== MIDI =====
 async function initMIDI() {
   try {
-    const access = await navigator.requestMIDIAccess({ sysex: false });
+    const access = await navigator.requestMIDIAccess({ sysex: true });
+    // Attach handler to ALL inputs, prefer PartyKeys
     access.inputs.forEach(input => {
-      midiIn = input;
       input.onmidimessage = onMIDIMessage;
+      if (!midiIn || /partykey/i.test(input.name)) midiIn = input;
     });
-    access.outputs.forEach(output => { midiOut = output; });
+    access.outputs.forEach(output => {
+      if (!midiOut || /partykey/i.test(output.name)) midiOut = output;
+    });
     document.getElementById('midiDot').classList.add('connected');
     document.getElementById('midiStatus').textContent = 'MIDI: ' + (midiIn ? midiIn.name : 'Connected');
     if (midiOut) setIdleLEDs();

@@ -824,14 +824,21 @@ async function connectMIDI() {
     if (!navigator.requestMIDIAccess) { notify('Web MIDI not supported. Use Chrome/Edge.', 'error'); return; }
     try {
         midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+        // Attach handler to ALL inputs (support multiple MIDI devices)
         midiAccess.inputs.forEach(input => {
+            input.onmidimessage = handleMIDIMessage;
             if (!midiInputConnected) {
-                input.onmidimessage = handleMIDIMessage;
                 midiInputConnected = true;
                 document.getElementById('deviceName').textContent = input.name;
             }
         });
-        midiAccess.outputs.forEach(output => { if (!midiOutput) midiOutput = output; });
+        // Prefer PartyKeys output for LED
+        let _pkOut = null;
+        midiAccess.outputs.forEach(output => {
+            if (/partykey/i.test(output.name)) _pkOut = output;
+            else if (!midiOutput) midiOutput = output;
+        });
+        if (_pkOut) midiOutput = _pkOut;
 
         if (midiInputConnected) {
             document.getElementById('statusDot').classList.add('connected');
@@ -842,15 +849,20 @@ async function connectMIDI() {
         }
 
         midiAccess.onstatechange = (e) => {
-            if (e.port.type === 'input' && e.port.state === 'connected' && !midiInputConnected) {
+            if (e.port.type === 'input' && e.port.state === 'connected') {
                 e.port.onmidimessage = handleMIDIMessage;
-                midiInputConnected = true;
-                document.getElementById('statusDot').classList.add('connected');
-                document.getElementById('midiStatusText').textContent = 'MIDI connected';
+                if (!midiInputConnected) {
+                    midiInputConnected = true;
+                    document.getElementById('statusDot').classList.add('connected');
+                    document.getElementById('midiStatusText').textContent = 'MIDI connected';
+                }
                 document.getElementById('deviceName').textContent = e.port.name;
                 notify('MIDI device connected: ' + e.port.name);
             }
-            if (e.port.type === 'output' && e.port.state === 'connected' && !midiOutput) midiOutput = e.port;
+            if (e.port.type === 'output' && e.port.state === 'connected') {
+                if (/partykey/i.test(e.port.name)) midiOutput = e.port;
+                else if (!midiOutput) midiOutput = e.port;
+            }
         };
     } catch (err) { notify('MIDI access denied.', 'error'); console.error(err); }
 }

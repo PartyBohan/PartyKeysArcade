@@ -393,9 +393,9 @@ function updateMIDIPorts() {
     updateStatusDot();
   };
   inSel.onchange = () => {
-    if (midiInput) midiInput.onmidimessage = null;
+    // Attach handler to ALL inputs (support multiple devices)
+    midiAccess.inputs.forEach(inp => { inp.onmidimessage = handleMIDIMessage; });
     midiInput = inSel.value ? midiAccess.inputs.get(inSel.value) : null;
-    if (midiInput) midiInput.onmidimessage = handleMIDIMessage;
     updateStatusDot();
   };
   // Auto-select first available

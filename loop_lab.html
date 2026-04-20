@@ -704,12 +704,12 @@ async function initMIDI() {
 
 function scanMIDI(access) {
     midiOutput = null; midiInput = null;
-    for (const o of access.outputs.values()) { midiOutput = o; break; }
-    for (const inp of access.inputs.values()) {
-        midiInput = inp;
+    // Attach handler to ALL inputs, prefer PartyKeys
+    access.outputs.forEach(o => { if(!midiOutput || /partykey/i.test(o.name)) midiOutput = o; });
+    access.inputs.forEach(inp => {
         inp.onmidimessage = onMIDIMessage;
-        break;
-    }
+        if(!midiInput || /partykey/i.test(inp.name)) midiInput = inp;
+    });
     const dot = document.getElementById('midiDot');
     const txt = document.getElementById('midiText');
     if (midiInput || midiOutput) {

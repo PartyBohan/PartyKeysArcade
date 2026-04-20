@@ -1038,14 +1038,28 @@ function _pkAllOff(output){
         if (!navigator.requestMIDIAccess) { notify('Web MIDI not supported. Use Chrome/Edge.', 'error'); return; }
         try {
             midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+            // Attach handler to ALL inputs (user may have multiple MIDI devices)
+            let pkInput = null;
+            let anyInput = null;
             midiAccess.inputs.forEach(input => {
-                if (!midiInputConnected) {
-                    input.onmidimessage = handleMIDIMessage;
-                    midiInputConnected = true;
-                    document.getElementById('deviceName').textContent = input.name;
-                }
+                input.onmidimessage = handleMIDIMessage;
+                // Prefer PartyKeys device for display name
+                if (/partykey/i.test(input.name)) pkInput = input;
+                else if (!anyInput) anyInput = input;
             });
-            midiAccess.outputs.forEach(output => { if (!midiOutput) { midiOutput = output; } });
+            const displayInput = pkInput || anyInput;
+            if (displayInput) {
+                midiInputConnected = true;
+                document.getElementById('deviceName').textContent = displayInput.name;
+            }
+
+            // Prefer PartyKeys output for LED, fallback to first output
+            let pkOutput = null;
+            midiAccess.outputs.forEach(output => {
+                if (/partykey/i.test(output.name)) pkOutput = output;
+                else if (!midiOutput) midiOutput = output;
+            });
+            if (pkOutput) midiOutput = pkOutput;
 
             if (midiInputConnected) {
                 document.getElementById('statusDot').classList.add('connected');
@@ -1056,15 +1070,25 @@ function _pkAllOff(output){
             }
 
             midiAccess.onstatechange = (e) => {
-                if (e.port.type === 'input' && e.port.state === 'connected' && !midiInputConnected) {
+                if (e.port.type === 'input' && e.port.state === 'connected') {
                     e.port.onmidimessage = handleMIDIMessage;
-                    midiInputConnected = true;
-                    document.getElementById('statusDot').classList.add('connected');
-                    document.getElementById('midiStatusText').textContent = 'MIDI connected';
-                    document.getElementById('deviceName').textContent = e.port.name;
+                    if (!midiInputConnected) {
+                        midiInputConnected = true;
+                        document.getElementById('statusDot').classList.add('connected');
+                        document.getElementById('midiStatusText').textContent = 'MIDI connected';
+                    }
+                    // Update display name, prefer PartyKeys
+                    if (/partykey/i.test(e.port.name)) {
+                        document.getElementById('deviceName').textContent = e.port.name;
+                    } else if (!document.getElementById('deviceName').textContent) {
+                        document.getElementById('deviceName').textContent = e.port.name;
+                    }
                     notify('MIDI device connected: ' + e.port.name);
                 }
-                if (e.port.type === 'output' && e.port.state === 'connected' && !midiOutput) midiOutput = e.port;
+                if (e.port.type === 'output' && e.port.state === 'connected') {
+                    if (/partykey/i.test(e.port.name)) midiOutput = e.port;
+                    else if (!midiOutput) midiOutput = e.port;
+                }
             };
         } catch(err) { notify('MIDI access denied.', 'error'); console.error(err); }
     }
@@ -1120,13 +1144,17 @@ function _pkAllOff(output){
     // MIDI MESSAGE HANDLER
     // ═══════════════════════════════════════
     function handleMIDIMessage(msg) {
-        const [status, note, velocity] = msg.data;
+        const data = msg.data;
+        // Ignore SysEx and non-standard messages
+        if (data[0] === 0xF0 || data.length < 3) return;
+        const [status, note, velocity] = data;
         const cmd = status & 0xF0;
         const noteOn = cmd === 0x90 && velocity > 0;
         const noteOff = cmd === 0x80 || (cmd === 0x90 && velocity === 0);
         if (!noteOn && !noteOff) return;
 
         const noteName = NOTE_NAMES[note % 12];
+        console.log('[MIDI]', noteOn ? 'ON' : 'OFF', noteName, 'midi=' + note, 'running=' + game.running, 'stones=' + game.stones.length);
         if (noteOn) {
             initAudio();
             game.pressedNotes.add(noteName);
@@ -1155,17 +1183,21 @@ function _pkAllOff(output){
     }
 
     function registerNoteForChord(noteName) {
-        if (!game.running) return;
+        if (!game.running) { console.log('[MATCH] game not running, skip'); return; }
+        console.log('[MATCH] registerNote:', noteName, 'stones:', game.stones.length);
         for (let i = game.stones.length - 1; i >= 0; i--) {
             const stone = game.stones[i];
             if (stone.dying) continue;
             const required = chordToNoteNames(stone.chord);
+            console.log('[MATCH] stone[' + i + '] chord=' + stone.chord.name, 'required=' + required.join(','), 'matched=' + [...stone.matchedNotes].join(','), 'x=' + Math.round(stone.x));
             // If this note belongs to this chord, record it
             if (required.includes(noteName)) {
                 stone.matchedNotes.add(noteName);
+                console.log('[MATCH] ✓ added', noteName, '→ matched now:', [...stone.matchedNotes].join(','));
             }
             // All notes matched → chord complete!
             if (required.every(n => stone.matchedNotes.has(n))) {
+                console.log('[MATCH] ★ CHORD COMPLETE! destroying stone[' + i + ']');
                 destroyStone(i);
                 break;
             }

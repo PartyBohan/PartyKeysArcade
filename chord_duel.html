@@ -446,14 +446,14 @@ function stopBGM() {
 document.getElementById('connectBtn').onclick = async () => {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     try {
-        midiAccess = await navigator.requestMIDIAccess({sysex: false});
+        midiAccess = await navigator.requestMIDIAccess({sysex: true});
+        // Attach handler to ALL inputs (support multiple MIDI devices)
+        midiAccess.inputs.forEach(input => { input.onmidimessage = onMIDI; });
         const inputs = Array.from(midiAccess.inputs.values());
         const outputs = Array.from(midiAccess.outputs.values());
-        if (inputs.length > 0) {
-            midiInput = inputs[0];
-            midiInput.onmidimessage = onMIDI;
-        }
-        if (outputs.length > 0) midiOutput = outputs[0];
+        if (inputs.length > 0) midiInput = inputs.find(i => /partykey/i.test(i.name)) || inputs[0];
+        // Prefer PartyKeys output for LED
+        if (outputs.length > 0) midiOutput = outputs.find(o => /partykey/i.test(o.name)) || outputs[0];
         document.getElementById('statusDot').classList.add('connected');
         document.getElementById('midiStatus').textContent = (midiInput ? midiInput.name : 'Input') + (midiOutput ? ' + LED' : '');
         unlockBosses();

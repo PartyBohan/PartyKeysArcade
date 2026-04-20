@@ -240,11 +240,12 @@ function ledRainbow(ms = 800) {
 
 async function initMIDI() {
   try {
-    const acc = await navigator.requestMIDIAccess({ sysex: false });
+    const acc = await navigator.requestMIDIAccess({ sysex: true });
     const bind = () => {
       midiOut = null; midiIn = null;
-      for (const o of acc.outputs.values()) { midiOut = o; break; }
-      for (const i of acc.inputs.values()) { midiIn = i; i.onmidimessage = onMIDI; break; }
+      // Attach handler to ALL inputs, prefer PartyKeys for display
+      acc.inputs.forEach(i => { i.onmidimessage = onMIDI; if(!midiIn || /partykey/i.test(i.name)) midiIn = i; });
+      acc.outputs.forEach(o => { if(!midiOut || /partykey/i.test(o.name)) midiOut = o; });
       const ok = !!(midiIn || midiOut);
       document.getElementById('midi-dot').classList.toggle('on', ok);
       document.getElementById('midi-status').textContent = ok ? (midiIn || midiOut).name : 'No MIDI device';

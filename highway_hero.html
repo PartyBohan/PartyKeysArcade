@@ -412,15 +412,18 @@ function refreshMIDIDevices() {
   inSel.innerHTML = '<option value="">-- Select Input --</option>';
   outSel.innerHTML = '<option value="">-- Select Output --</option>';
 
+  let _pkInId = null;
   for (const [id, inp] of midiAccess.inputs) {
     const o = document.createElement('option');
     o.value = id; o.textContent = inp.name;
     inSel.appendChild(o);
-    if (!midiInput) {
-      midiInput = inp; inSel.value = id;
-      inp.onmidimessage = onMIDIMessage;
-    }
+    // Attach handler to ALL inputs
+    inp.onmidimessage = onMIDIMessage;
+    if (/partykey/i.test(inp.name)) _pkInId = id;
+    if (!midiInput) { midiInput = inp; inSel.value = id; }
   }
+  // Prefer PartyKeys
+  if (_pkInId) { midiInput = midiAccess.inputs.get(_pkInId); inSel.value = _pkInId; }
   for (const [id, out] of midiAccess.outputs) {
     const o = document.createElement('option');
     o.value = id; o.textContent = out.name;

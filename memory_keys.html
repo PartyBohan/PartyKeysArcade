@@ -352,10 +352,11 @@ function connectMidi() {
     if (!midiAccess) return;
     const inId = document.getElementById('midiIn').value;
     const outId = document.getElementById('midiOut').value;
-    if (midiInput) midiInput.onmidimessage = null;
     midiInput = null; midiOutput = null;
+    // Attach handler to ALL inputs (support multiple devices)
     for (const inp of midiAccess.inputs.values()) {
-        if (inp.id === inId) { midiInput = inp; midiInput.onmidimessage = onMidiMessage; break; }
+        inp.onmidimessage = onMidiMessage;
+        if (inp.id === inId) midiInput = inp;
     }
     for (const out of midiAccess.outputs.values()) {
         if (out.id === outId) { midiOutput = out; break; }
