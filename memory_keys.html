@@ -378,7 +378,7 @@ function ledOff(note) {
 }
 function allLedsOff() {
     if (!midiOutput) return;
-    for (let n = MIDI_LOW; n <= MIDI_HIGH; n++) ledOff(n);
+    _pkAllOff(midiOutput);
 }
 function rainbowCascade(callback) {
     const colors = ['red','green','blue','yellow','cyan','purple','white'];
@@ -545,23 +545,24 @@ function onNoteOn(note) {
     const expected = sequence[seqIndex];
     if (gameMode === 'harmonic') {
         heldNotes.add(note);
-        // Check if held notes match expected chord
+        // Initialize sequential match tracker if needed
+        if (!expected._matched) expected._matched = new Set();
         const target = new Set(expected.chord.notes);
-        // Check if all target notes are held
-        let allHeld = true;
-        for (const tn of target) { if (!heldNotes.has(tn)) { allHeld = false; break; } }
-        if (allHeld && heldNotes.size === target.size) {
-            // Correct chord
+        // Sequential: mark each correct note as matched
+        if (target.has(note)) {
+            expected._matched.add(note);
+            highlightKey(note, PALETTE_HEX.green);
+        } else {
+            // Wrong note — game over
+            gameOver();
+            return;
+        }
+        // Check if all notes matched sequentially
+        if (target.size === expected._matched.size) {
             ledOn(expected.chord.root, 'green');
-            expected.chord.notes.forEach(n => highlightKey(n, PALETTE_HEX.green));
             seqIndex++;
             heldNotes.clear();
             if (seqIndex >= sequence.length) roundComplete();
-        } else if (heldNotes.size >= target.size) {
-            // Wrong chord (too many notes or wrong notes)
-            let wrong = false;
-            for (const hn of heldNotes) { if (!target.has(hn)) { wrong = true; break; } }
-            if (wrong) gameOver();
         }
     } else {
         // Melodic or Rhythmic

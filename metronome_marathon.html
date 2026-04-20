@@ -741,7 +741,7 @@ function setLED(midiNote, color) {
 
 function clearAllLEDs() {
     if (midiOutput) {
-        for (let n = PK_START; n <= PK_END; n++) _pkSendOne(midiOutput, n, 0);
+        _pkAllOff(midiOutput);
     }
     document.querySelectorAll('.key').forEach(k => {
         k.className = k.className.replace(/led-\w+/g, '').replace(/active/g, '').trim();
@@ -874,10 +874,12 @@ function checkHit(pressedNote) {
 
         // Check if the pressed note is in this target
         if (t.midi.includes(pressedNote)) {
-            // For chords, check if all notes are held
-            const allHeld = t.midi.every(n => GS.heldNotes.has(n));
+            // Sequential chord matching: track individually matched notes
+            if (!t._matched) t._matched = new Set();
+            t._matched.add(pressedNote);
+            const allMatched = t.midi.every(n => t._matched.has(n));
 
-            if (t.midi.length === 1 || allHeld) {
+            if (t.midi.length === 1 || allMatched) {
                 const absDiff = Math.abs(diff);
 
                 if (absDiff <= perfect_ms) {

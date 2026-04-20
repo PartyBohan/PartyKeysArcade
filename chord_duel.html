@@ -471,12 +471,12 @@ function onMIDI(e) {
         playPianoNote(note);
         setLED(note, LED_COLORS.white);
         handleNoteOn(note);
+        // Sequential chord check: try matching after each note press
+        checkChordBufferMatch();
     } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
         pressedNotes.delete(note);
         setLED(note, LED_COLORS.off);
-        if (pressedNotes.size === 0 && chordBuffer.size > 0) {
-            handleChordRelease();
-        }
+        // Don't require release to evaluate — sequential matching handles it
     }
 }
 
@@ -493,12 +493,28 @@ function handleNoteOn(note) {
     }
 }
 
+function checkChordBufferMatch() {
+    // Check if accumulated notes form a valid chord (sequential — don't need simultaneous)
+    if (chordBuffer.size < 3) return; // minimum chord size
+    const notes = Array.from(chordBuffer);
+    const result = identifyChord(notes);
+    if (result) {
+        chordBuffer.clear();
+        if (phase === 'player_attack') {
+            resolveAttack(notes);
+        } else if (phase === 'player_defend') {
+            resolveDefend(notes);
+        }
+    }
+}
+
 function handleChordRelease() {
-    if (phase === 'player_attack') {
+    // Kept for compatibility but sequential matching is primary
+    if (phase === 'player_attack' && chordBuffer.size > 0) {
         const notes = Array.from(chordBuffer);
         chordBuffer.clear();
         resolveAttack(notes);
-    } else if (phase === 'player_defend') {
+    } else if (phase === 'player_defend' && chordBuffer.size > 0) {
         const notes = Array.from(chordBuffer);
         chordBuffer.clear();
         resolveDefend(notes);
@@ -541,7 +557,12 @@ function ledColorToCSS(vel) {
 }
 
 function clearAllLEDs() {
-    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) setLED(n, LED_COLORS.off);
+    if(midiOutput) _pkAllOff(midiOutput);
+    // Also clear visual LEDs
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
+        const el = document.getElementById('led' + n);
+        if (el) { el.style.background = ''; el.classList.remove('active'); el.style.color = ''; }
+    }
 }
 
 function flashAllLEDs(color, duration=500) {

@@ -1079,7 +1079,7 @@ function _pkAllOff(output){
 
     function clearAllLEDs() {
         if (!midiOutput) return;
-        for (let n = PK_START; n <= PK_END; n++) _pkSendOne(midiOutput, n, 0);
+        _pkAllOff(midiOutput);
     }
 
     function lightUpChordLED(noteNames, color) {
@@ -1142,7 +1142,12 @@ function _pkAllOff(output){
             const stone = game.stones[i];
             if (stone.dying) continue;
             const required = chordToNoteNames(stone.chord);
-            if (required.every(n => pressed.has(n)) && pressed.size >= required.length) {
+            // Sequential matching: each correct note pressed adds to matchedNotes
+            pressed.forEach(n => {
+                if (required.includes(n)) stone.matchedNotes.add(n);
+            });
+            // All notes matched → chord complete!
+            if (required.every(n => stone.matchedNotes.has(n))) {
                 destroyStone(i);
                 break;
             }
@@ -1561,7 +1566,8 @@ function _pkAllOff(output){
             rotation: Math.random() * Math.PI * 2,
             rotSpeed: (Math.random() - 0.5) * 0.04,
             hinted: false, urgentHinted: false,
-            tier
+            tier,
+            matchedNotes: new Set()  // Track individually matched notes
         });
     }
 

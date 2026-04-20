@@ -306,7 +306,7 @@ function setLED(midiNote, color){
     const v = map[color] || 0;
     _pkSendOne(midiOutput, midiNote, v);
 }
-function clearAllLEDs(){ for(let n=PK_START;n<=PK_END;n++) setLED(n,'off'); }
+function clearAllLEDs(){ if(midiOutput) _pkAllOff(midiOutput); }
 function lightLED(midi, color){ setLED(midi, color); }
 
 // ══════ KEYBOARD UI ══════

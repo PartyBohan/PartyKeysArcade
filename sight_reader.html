@@ -469,7 +469,8 @@ function setLED(note, color) {
 }
 
 function clearAllLEDs() {
-  for (let n = 48; n <= 83; n++) setLED(n, LED_OFF);
+  if(midiOutput) _pkAllOff(midiOutput);
+  for (let n = 48; n <= 83; n++) ledState[n] = 0;
 }
 
 // ===================== GAME STATE =====================

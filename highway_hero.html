@@ -463,7 +463,7 @@ function sendLED(note, color) {
 }
 
 function clearAllLEDs() {
-  for (let n = 48; n <= 83; n++) sendLED(n, LED_OFF);
+  if(midiOutput) _pkAllOff(midiOutput);
 }
 
 function onMIDIMessage(msg) {

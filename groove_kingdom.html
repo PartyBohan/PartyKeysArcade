@@ -467,7 +467,7 @@ function ledSet(n, c) {
     if (!midiOut || n < MIDI_LO || n > MIDI_HI) return;
     _pkSendOne(midiOut, n, c);
 }
-function ledClear() { if (!midiOut) return; for (let n=MIDI_LO; n<=MIDI_HI; n++) _pkSendOne(midiOut, n, 0); }
+function ledClear() { if (!midiOut) return; _pkAllOff(midiOut); }
 function ledNotes(notes, c) { notes.forEach(n => { if(n>=MIDI_LO&&n<=MIDI_HI) ledSet(n,c); }); }
 
 function ledRainbow() {
@@ -568,8 +568,10 @@ function checkHit() {
 
         // Check note match
         if (layer === 1) {
-            // Chord: all notes must be pressed
-            if (ev.notes.every(n => pressed.has(n))) {
+            // Chord: track matched notes sequentially
+            if (!ev._matched) ev._matched = new Set();
+            ev.notes.forEach(n => { if (pressed.has(n)) ev._matched.add(n); });
+            if (ev.notes.every(n => ev._matched.has(n))) {
                 hits[i] = true;
                 onHit(ev, true);
             }

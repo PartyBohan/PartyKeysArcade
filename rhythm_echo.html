@@ -227,7 +227,7 @@ function ledFlash(n, c, ms = 150) {
   ledOn(n, c);
   ledTmrs[n] = setTimeout(() => ledOff(n), ms);
 }
-function ledAllOff() { for (let n = LED_LO; n <= LED_HI; n++) ledOff(n); }
+function ledAllOff() { if(midiOut) _pkAllOff(midiOut); }
 function ledCascade(c, ms = 600) {
   const cnt = LED_HI - LED_LO + 1, step = ms / cnt;
   for (let i = 0; i < cnt; i++) setTimeout(() => ledFlash(LED_LO + i, c, 200), i * step);

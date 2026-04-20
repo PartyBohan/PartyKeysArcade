@@ -260,7 +260,7 @@ function setIdleLEDs() {
 }
 
 function clearAllLEDs() {
-  for (let n = P1_MIN; n <= P2_MAX; n++) sendLED(n, 0);
+  if(midiOut) _pkAllOff(midiOut);
 }
 
 function flashLED(note, color, dur=200) {
@@ -760,25 +760,29 @@ function handleInput(player, note) {
   }
 }
 
+// Sequential matched note trackers for each player
+let p1Matched = new Set(), p2Matched = new Set();
+
 function handleSpeedInput(player, note) {
   const target = player === 1 ? currentChallenge.p1Notes : currentChallenge.p2Notes;
-  const pressed = player === 1 ? p1Pressed : p2Pressed;
+  const matched = player === 1 ? p1Matched : p2Matched;
 
-  // Check if all target notes are pressed
-  const allPressed = target.every(n => pressed.has(n));
-  // Check for wrong notes
-  const hasWrong = [...pressed].some(n => !target.includes(n));
-
-  if (hasWrong) {
+  // Check if this note is a target note
+  if (target.includes(note)) {
+    matched.add(note);
+  } else {
+    // Wrong note
     flashKey(note, 'wrong');
     flashLED(note, LED_COLORS.red);
     playSFX('wrong');
-    // Clear pressed for this player
+    matched.clear();
     if (player === 1) p1Pressed.clear(); else p2Pressed.clear();
     return;
   }
 
-  if (allPressed) {
+  // Sequential check: all target notes matched?
+  if (target.every(n => matched.has(n))) {
+    matched.clear();
     roundWon(player);
   }
 }
@@ -864,19 +868,21 @@ function handleEchoInput(player, note) {
 function handleQuizInput(player, note) {
   if (!quizPlayed) return;
   const target = player === 1 ? currentChallenge.p1Notes : currentChallenge.p2Notes;
-  const pressed = player === 1 ? p1Pressed : p2Pressed;
-  const allPressed = target.every(n => pressed.has(n));
-  const hasWrong = [...pressed].some(n => !target.includes(n));
+  const matched = player === 1 ? p1Matched : p2Matched;
 
-  if (hasWrong) {
+  if (target.includes(note)) {
+    matched.add(note);
+  } else {
     flashKey(note, 'wrong');
     flashLED(note, LED_COLORS.red);
     playSFX('wrong');
+    matched.clear();
     if (player === 1) p1Pressed.clear(); else p2Pressed.clear();
     return;
   }
 
-  if (allPressed) {
+  if (target.every(n => matched.has(n))) {
+    matched.clear();
     const elapsed = (Date.now() - roundStartTime) / 1000;
     let bonus = elapsed < 2 ? 0.5 : 0;
     addScore(player, bonus);

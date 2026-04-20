@@ -727,7 +727,7 @@ function sendLED(note, color) {
 }
 
 function clearAllLEDs() {
-    for (let n = NOTE_MIN; n <= NOTE_MAX; n++) sendLED(n, 0);
+    if(midiOutput) _pkAllOff(midiOutput);
 }
 
 function onMIDIMessage(msg) {

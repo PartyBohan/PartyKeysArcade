@@ -432,7 +432,7 @@ function sendLED(note, color) {
 }
 
 function clearAllLEDs() {
-  for (let n = MIDI_LOW; n <= MIDI_HIGH; n++) sendLED(n, LED_OFF);
+  if(midiOutput) _pkAllOff(midiOutput);
 }
 
 function updateLEDs() {

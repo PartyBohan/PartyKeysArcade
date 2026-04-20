@@ -864,7 +864,7 @@ function setLED(midiNote, color) {
 
 function clearAllLEDs() {
     if (!midiOutput) return;
-    for (let n = PK_START; n <= PK_END; n++) _pkSendOne(midiOutput, n, 0);
+    _pkAllOff(midiOutput);
 }
 
 function setChordLEDs(midiNotes, color) {
@@ -1147,9 +1147,18 @@ function checkPlayedChord() {
     const target = new Set(game.currentChord.midiNotes);
     const pressed = game.pressedMidi;
 
-    // Check if wrong notes
+    // Initialize sequential match tracker if needed
+    if (!game.matchedChordNotes) game.matchedChordNotes = new Set();
+
+    // Check each pressed note
     pressed.forEach(n => {
-        if (!target.has(n) && n >= PK_START && n <= PK_END) {
+        if (target.has(n)) {
+            // Correct note — mark as matched
+            game.matchedChordNotes.add(n);
+            setVirtualKeyLed(n, 'led-green');
+            setLED(n, 'green');
+        } else if (n >= PK_START && n <= PK_END) {
+            // Wrong note
             setVirtualKeyLed(n, 'led-red');
             setLED(n, 'red');
             setTimeout(() => {
@@ -1160,13 +1169,14 @@ function checkPlayedChord() {
         }
     });
 
-    // Check if all target notes are pressed
+    // Sequential check: all target notes matched (don't need to hold simultaneously)
     let allCorrect = true;
     target.forEach(n => {
-        if (!pressed.has(n)) allCorrect = false;
+        if (!game.matchedChordNotes.has(n)) allCorrect = false;
     });
 
     if (allCorrect) {
+        game.matchedChordNotes = new Set(); // reset for next case
         caseSolved();
     }
 }

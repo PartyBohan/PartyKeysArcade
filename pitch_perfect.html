@@ -639,10 +639,8 @@ function sendLED(note, colorVel) {
 }
 
 function clearAllLEDs() {
-    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
-        sendLED(n, 0);
-        delete keyLEDs[n];
-    }
+    if(midiOutput) _pkAllOff(midiOutput);
+    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) delete keyLEDs[n];
     updateVirtualKeyboardLEDs();
 }
 
