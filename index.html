@@ -22,13 +22,12 @@
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         color: var(--text);
         background: linear-gradient(160deg, #0f1029 0%, #1a1040 25%, #1e1145 50%, #12203a 75%, #0f1029 100%);
-        background-attachment: fixed;
         overflow-x:hidden;
         min-height:100vh;
     }
 
     /* ─── Animated Hero Canvas ─── */
-    #heroBg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.5}
+    #heroBg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.5;will-change:transform}
 
     .page{position:relative;z-index:1}
 
@@ -36,7 +35,7 @@
     .lang-switch{
         position:fixed;top:16px;right:20px;z-index:100;
         display:flex;align-items:center;
-        background:rgba(15,16,41,0.7);backdrop-filter:blur(16px);
+        background:rgba(15,16,41,0.92);
         border:1px solid rgba(255,255,255,0.1);border-radius:24px;
         overflow:hidden;
     }
@@ -82,8 +81,8 @@
     .midi-bar{
         max-width:480px;margin:20px auto 0;
         display:flex;align-items:center;justify-content:center;gap:12px;
-        background:rgba(15,16,41,0.6);border:1px solid var(--card-border);
-        border-radius:12px;padding:8px 18px;backdrop-filter:blur(8px);font-size:0.82em;
+        background:rgba(15,16,41,0.85);border:1px solid var(--card-border);
+        border-radius:12px;padding:8px 18px;font-size:0.82em;
     }
     .midi-dot{width:10px;height:10px;border-radius:50%;background:#64748b;flex-shrink:0}
     .midi-dot.on{background:#34d399;box-shadow:0 0 10px #34d399;animation:pulse 1.6s infinite}
@@ -93,7 +92,7 @@
         display:flex;justify-content:center;gap:8px;flex-wrap:wrap;
         padding:0 20px;margin:40px auto 0;max-width:900px;
         position:sticky;top:0;z-index:50;
-        background:rgba(15,16,41,0.85);backdrop-filter:blur(16px);
+        background:rgba(15,16,41,0.95);
         border-radius:0 0 16px 16px;padding:12px 20px;
     }
     .cat-btn{
@@ -139,9 +138,8 @@
     .card{
         position:relative;border-radius:16px;overflow:hidden;
         cursor:pointer;transition:transform 0.28s cubic-bezier(.34,1.56,.64,1),box-shadow 0.28s;
-        background:var(--card);border:1px solid var(--card-border);
+        background:rgba(15,16,41,0.55);border:1px solid var(--card-border);
         display:flex;flex-direction:column;
-        backdrop-filter:blur(8px);
     }
     .card:hover{
         transform:translateY(-8px) scale(1.02);
@@ -158,8 +156,8 @@
     .card-emoji{font-size:3.2em;position:relative;z-index:2;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.5));transition:transform 0.3s}
     .card:hover .card-emoji{transform:scale(1.15) rotate(-3deg)}
     .card-glow{
-        position:absolute;width:120px;height:120px;border-radius:50%;
-        filter:blur(40px);opacity:0.3;z-index:1;
+        position:absolute;width:160px;height:160px;border-radius:50%;
+        opacity:0.18;z-index:1;
     }
     /* Category colors */
     .card[data-cat="action"] .card-glow{background:#f472b6}
@@ -204,9 +202,6 @@
     .card:hover .card-play-btn{gap:8px;color:#fff}
     .card-play-btn .arrow{transition:transform 0.2s}
     .card:hover .card-play-btn .arrow{transform:translateX(3px)}
-
-    /* Floating particles on card hover */
-    .card-particles{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
 
     /* Hidden filter */
     .card.hidden{display:none!important}
@@ -686,25 +681,46 @@ function updateMidiText() {
     text.textContent = i18n[currentLang][map[midiState]] || '';
 }
 
-// ═══ Animated Background ═══
+// ═══ Animated Background (perf-optimized) ═══
 (function(){
     const c = document.getElementById('heroBg');
     const ctx = c.getContext('2d');
     let W, H, particles = [], t = 0;
+    let glowCanvas = null; // pre-rendered static glow layer
 
     function resize(){
         W = c.width = window.innerWidth;
         H = c.height = window.innerHeight;
+        // Pre-render glow + grid to offscreen canvas (drawn once, reused every frame)
+        glowCanvas = document.createElement('canvas');
+        glowCanvas.width = W; glowCanvas.height = H;
+        const g = glowCanvas.getContext('2d');
+        // Grid
+        g.strokeStyle = 'rgba(129,140,248,0.025)';
+        g.lineWidth = 1;
+        for(let x = 0; x < W; x += 60){ g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); }
+        for(let y = 0; y < H; y += 60){ g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+        // Glows
+        let grd = g.createRadialGradient(W*0.5,H*0.28,0,W*0.5,H*0.28,W*0.5);
+        grd.addColorStop(0,'rgba(99,102,241,0.07)'); grd.addColorStop(0.5,'rgba(56,189,248,0.03)'); grd.addColorStop(1,'transparent');
+        g.fillStyle=grd; g.fillRect(0,0,W,H);
+        grd = g.createRadialGradient(W*0.8,H*0.7,0,W*0.8,H*0.7,W*0.4);
+        grd.addColorStop(0,'rgba(244,114,182,0.05)'); grd.addColorStop(1,'transparent');
+        g.fillStyle=grd; g.fillRect(0,0,W,H);
+        grd = g.createRadialGradient(W*0.15,H*0.15,0,W*0.15,H*0.15,W*0.35);
+        grd.addColorStop(0,'rgba(52,211,153,0.04)'); grd.addColorStop(1,'transparent');
+        g.fillStyle=grd; g.fillRect(0,0,W,H);
     }
     resize();
-    window.addEventListener('resize', resize);
+    let resizeTimer;
+    window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 200); });
 
-    // Create floating music particles
-    const symbols = ['♩','♪','♫','♬','𝄞','𝄢'];
-    for(let i = 0; i < 40; i++){
+    // Fewer particles (18 instead of 40)
+    const symbols = ['♩','♪','♫','♬','𝄞'];
+    for(let i = 0; i < 18; i++){
         particles.push({
             x: Math.random()*2000, y: Math.random()*2000,
-            vx: (Math.random()-0.5)*0.3, vy: -Math.random()*0.4 - 0.1,
+            vx: (Math.random()-0.5)*0.25, vy: -Math.random()*0.3 - 0.08,
             size: Math.random()*14 + 8,
             symbol: symbols[Math.floor(Math.random()*symbols.length)],
             opacity: Math.random()*0.10 + 0.03,
@@ -712,66 +728,33 @@ function updateMidiText() {
         });
     }
 
-    // Soft grid with warm tint
-    function drawGrid(){
-        ctx.strokeStyle = 'rgba(129,140,248,0.025)';
-        ctx.lineWidth = 1;
-        const spacing = 60;
-        for(let x = 0; x < W; x += spacing){
-            ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
-        }
-        for(let y = 0; y < H; y += spacing){
-            ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
-        }
-    }
+    let lastFrame = 0;
+    const FRAME_INTERVAL = 1000/24; // cap at 24fps — plenty smooth for ambient bg
 
-    // Multi-glow: purple top-left, blue center, pink bottom-right
-    function drawGlow(){
-        // Primary center glow — blue-indigo
-        let grd = ctx.createRadialGradient(W*0.5, H*0.28, 0, W*0.5, H*0.28, W*0.5);
-        grd.addColorStop(0, 'rgba(99,102,241,0.07)');
-        grd.addColorStop(0.5, 'rgba(56,189,248,0.03)');
-        grd.addColorStop(1, 'transparent');
-        ctx.fillStyle = grd;
-        ctx.fillRect(0,0,W,H);
+    function draw(now){
+        requestAnimationFrame(draw);
+        if(now - lastFrame < FRAME_INTERVAL) return;
+        lastFrame = now;
 
-        // Secondary glow — pink bottom-right
-        grd = ctx.createRadialGradient(W*0.8, H*0.7, 0, W*0.8, H*0.7, W*0.4);
-        grd.addColorStop(0, 'rgba(244,114,182,0.05)');
-        grd.addColorStop(1, 'transparent');
-        ctx.fillStyle = grd;
-        ctx.fillRect(0,0,W,H);
-
-        // Tertiary glow — teal top-left
-        grd = ctx.createRadialGradient(W*0.15, H*0.15, 0, W*0.15, H*0.15, W*0.35);
-        grd.addColorStop(0, 'rgba(52,211,153,0.04)');
-        grd.addColorStop(1, 'transparent');
-        ctx.fillStyle = grd;
-        ctx.fillRect(0,0,W,H);
-    }
-
-    function draw(){
         ctx.clearRect(0,0,W,H);
-        drawGrid();
-        drawGlow();
+        // Stamp pre-rendered glow (single drawImage vs dozens of draw calls)
+        if(glowCanvas) ctx.drawImage(glowCanvas, 0, 0);
 
         // Music note particles
-        particles.forEach(p => {
-            p.x += p.vx + Math.sin(t*0.01 + p.phase)*0.2;
+        for(let i = 0; i < particles.length; i++){
+            const p = particles[i];
+            p.x += p.vx + Math.sin(t*0.01 + p.phase)*0.15;
             p.y += p.vy;
-            if(p.y < -30) { p.y = H + 30; p.x = Math.random()*W; }
+            if(p.y < -30){ p.y = H + 30; p.x = Math.random()*W; }
             if(p.x < -30) p.x = W + 30;
             if(p.x > W + 30) p.x = -30;
-
             ctx.font = p.size + 'px serif';
             ctx.fillStyle = `rgba(168,162,220,${p.opacity})`;
             ctx.fillText(p.symbol, p.x, p.y);
-        });
-
+        }
         t++;
-        requestAnimationFrame(draw);
     }
-    draw();
+    requestAnimationFrame(draw);
 })();
 
 // ═══ Category Filter ═══
@@ -820,33 +803,7 @@ if(navigator.requestMIDIAccess){
     updateMidiText();
 }
 
-// ═══ Card hover particles ═══
-document.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('mouseenter', function(){
-        const vis = this.querySelector('.card-vis');
-        for(let i = 0; i < 6; i++){
-            const dot = document.createElement('div');
-            dot.style.cssText = `
-                position:absolute;width:4px;height:4px;border-radius:50%;
-                background:rgba(255,255,255,0.6);pointer-events:none;z-index:5;
-                left:${Math.random()*100}%;top:${Math.random()*100}%;
-                animation:sparkle-float ${0.6+Math.random()*0.8}s ease-out forwards;
-            `;
-            vis.appendChild(dot);
-            setTimeout(() => dot.remove(), 1500);
-        }
-    });
-});
-
-// Sparkle animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes sparkle-float{
-        0%{opacity:1;transform:translateY(0) scale(1)}
-        100%{opacity:0;transform:translateY(-30px) scale(0)}
-    }
-`;
-document.head.appendChild(style);
+// Card hover effect handled by CSS only (no DOM particle creation)
 </script>
 </body>
 </html>
