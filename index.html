@@ -83,9 +83,12 @@
         display:flex;align-items:center;justify-content:center;gap:12px;
         background:rgba(15,16,41,0.85);border:1px solid var(--card-border);
         border-radius:12px;padding:8px 18px;font-size:0.82em;
+        cursor:pointer;transition:border-color 0.2s;
     }
-    .midi-dot{width:10px;height:10px;border-radius:50%;background:#64748b;flex-shrink:0}
+    .midi-bar:hover{border-color:rgba(56,189,248,0.3)}
+    .midi-dot{width:10px;height:10px;border-radius:50%;background:#64748b;flex-shrink:0;transition:background 0.3s}
     .midi-dot.on{background:#34d399;box-shadow:0 0 10px #34d399;animation:pulse 1.6s infinite}
+    .midi-dot.trying{background:#fbbf24;box-shadow:0 0 8px #fbbf24;animation:pulse 0.8s infinite}
 
     /* ─── Category Nav ─── */
     .cat-nav{
@@ -250,7 +253,7 @@
             <div class="hero-stat"><div class="hero-stat-val">8</div><div class="hero-stat-label" data-i18n="statLED">LED Colors</div></div>
             <div class="hero-stat"><div class="hero-stat-val">5</div><div class="hero-stat-label" data-i18n="statCat">Categories</div></div>
         </div>
-        <div class="midi-bar">
+        <div class="midi-bar" id="midiBar" onclick="retryMidi()">
             <span class="midi-dot" id="midiDot"></span>
             <span id="midiText" data-i18n="midiChecking">Checking MIDI…</span>
         </div>
@@ -510,11 +513,11 @@ const i18n = {
         badge: "ALL GAMES LIVE",
         heroSub: "Plug in your PartyKeys. Pick a game. Play.",
         statGames: "Games", statKeys: "Keys", statLED: "LED Colors", statCat: "Categories",
-        midiChecking: "Checking MIDI…",
+        midiChecking: "Connecting MIDI…",
         midiConnected: "PartyKeys connected",
         midiGeneric: "MIDI device connected",
-        midiPrompt: "Connect your PartyKeys to play",
-        midiAllow: "Allow MIDI access to play",
+        midiPrompt: "No MIDI device found — click to retry",
+        midiAllow: "MIDI access denied — click to retry",
         midiBrowser: "Use Chrome or Edge for Web MIDI",
         catAll: "All", catAction: "Action", catRhythm: "Rhythm",
         catEar: "Ear Training", catCreative: "Creative", catMulti: "Multiplayer",
@@ -579,11 +582,11 @@ const i18n = {
         badge: "全部游戏已上线",
         heroSub: "连接你的 PartyKeys，选个游戏，开始弹奏。",
         statGames: "款游戏", statKeys: "个琴键", statLED: "种灯光", statCat: "大类别",
-        midiChecking: "正在检测 MIDI…",
+        midiChecking: "正在连接 MIDI…",
         midiConnected: "PartyKeys 已连接",
         midiGeneric: "MIDI 设备已连接",
-        midiPrompt: "连接你的 PartyKeys 开始游戏",
-        midiAllow: "请允许 MIDI 访问权限",
+        midiPrompt: "未检测到 MIDI 设备 — 点击重试",
+        midiAllow: "MIDI 权限被拒绝 — 点击重试",
         midiBrowser: "请使用 Chrome 或 Edge 浏览器",
         catAll: "全部", catAction: "动作", catRhythm: "节奏",
         catEar: "听力训练", catCreative: "创作", catMulti: "多人",
@@ -778,30 +781,58 @@ document.querySelectorAll('.cat-btn').forEach(btn => {
 // ═══ Launch Game ═══
 function launch(url){ window.open(url, '_blank'); }
 
-// ═══ MIDI Detection ═══
-if(navigator.requestMIDIAccess){
-    navigator.requestMIDIAccess({sysex:true}).then(access => {
-        const inputs = [...access.inputs.values()];
-        const dot = document.getElementById('midiDot');
-        const pk = inputs.find(d => /partykey/i.test(d.name));
-        if(pk){
-            dot.classList.add('on');
-            midiState = 'pk';
-        } else if(inputs.length > 0){
-            dot.classList.add('on');
-            midiState = 'generic';
-        } else {
-            midiState = 'none';
-        }
+// ═══ MIDI Detection (with hot-plug & retry) ═══
+let midiAccess = null;
+
+function scanMidiInputs() {
+    if (!midiAccess) return;
+    const inputs = [...midiAccess.inputs.values()];
+    const dot = document.getElementById('midiDot');
+    dot.className = 'midi-dot'; // reset classes
+    const pk = inputs.find(d => /partykey/i.test(d.name));
+    if (pk) {
+        dot.classList.add('on');
+        midiState = 'pk';
+    } else if (inputs.length > 0) {
+        dot.classList.add('on');
+        midiState = 'generic';
+    } else {
+        midiState = 'none';
+    }
+    updateMidiText();
+}
+
+function initMidi() {
+    if (!navigator.requestMIDIAccess) {
+        midiState = 'unsupported';
         updateMidiText();
+        return;
+    }
+    const dot = document.getElementById('midiDot');
+    dot.className = 'midi-dot trying';
+    midiState = 'checking';
+    updateMidiText();
+
+    navigator.requestMIDIAccess({sysex:true}).then(access => {
+        midiAccess = access;
+        // Listen for hot-plug / unplug
+        access.onstatechange = () => scanMidiInputs();
+        scanMidiInputs();
     }).catch(() => {
+        dot.className = 'midi-dot';
         midiState = 'denied';
         updateMidiText();
     });
-} else {
-    midiState = 'unsupported';
-    updateMidiText();
 }
+
+function retryMidi() {
+    // If already connected, no need to retry
+    if (midiState === 'pk' || midiState === 'generic') return;
+    initMidi();
+}
+
+// Auto-init on load
+initMidi();
 
 // Card hover effect handled by CSS only (no DOM particle creation)
 </script>
