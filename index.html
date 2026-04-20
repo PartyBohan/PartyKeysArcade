@@ -792,7 +792,7 @@ function scanMidiInputs() {
     if (!midiAccess) return;
     const inputs = [...midiAccess.inputs.values()];
     const dot = document.getElementById('midiDot');
-    dot.className = 'midi-dot'; // reset classes
+    dot.className = 'midi-dot';
     const pk = inputs.find(d => /partykey/i.test(d.name));
     if (pk) {
         dot.classList.add('on');
@@ -806,6 +806,12 @@ function scanMidiInputs() {
     updateMidiText();
 }
 
+function connectMidiAccess(access) {
+    midiAccess = access;
+    access.onstatechange = () => scanMidiInputs();
+    scanMidiInputs();
+}
+
 function initMidi() {
     if (!navigator.requestMIDIAccess) {
         midiState = 'unsupported';
@@ -817,21 +823,32 @@ function initMidi() {
     midiState = 'checking';
     updateMidiText();
 
-    navigator.requestMIDIAccess({sysex:true}).then(access => {
-        midiAccess = access;
-        // Listen for hot-plug / unplug
-        access.onstatechange = () => scanMidiInputs();
-        scanMidiInputs();
+    // Try without sysex first (Chrome grants this more easily)
+    // then upgrade to sysex for LED support
+    navigator.requestMIDIAccess().then(access => {
+        connectMidiAccess(access);
+        // Now try to upgrade to sysex silently for LED output in games
+        navigator.requestMIDIAccess({sysex:true}).then(sysAccess => {
+            connectMidiAccess(sysAccess);
+        }).catch(() => { /* sysex denied, basic MIDI still works */ });
     }).catch(() => {
-        dot.className = 'midi-dot';
-        midiState = 'denied';
-        updateMidiText();
+        // Basic MIDI also denied — try sysex as last resort (may trigger a prompt)
+        navigator.requestMIDIAccess({sysex:true}).then(access => {
+            connectMidiAccess(access);
+        }).catch(() => {
+            dot.className = 'midi-dot';
+            midiState = 'denied';
+            updateMidiText();
+        });
     });
 }
 
 function retryMidi() {
-    // If already connected, no need to retry
     if (midiState === 'pk' || midiState === 'generic') return;
+    // Flash the bar to show something is happening
+    const bar = document.getElementById('midiBar');
+    bar.style.borderColor = 'rgba(251,191,36,0.5)';
+    setTimeout(() => { bar.style.borderColor = ''; }, 1500);
     initMidi();
 }
 
