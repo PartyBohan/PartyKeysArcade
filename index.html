@@ -96,7 +96,7 @@
         overflow:hidden;transition:max-height 0.4s ease, opacity 0.3s;
         max-height:0;opacity:0;
     }
-    .test-panel.open{max-height:260px;opacity:1}
+    .test-panel.open{max-height:300px;opacity:1}
     .test-toggle{
         display:flex;align-items:center;justify-content:center;gap:8px;
         max-width:320px;margin:16px auto 0;
@@ -145,16 +145,18 @@
     .p-key.black.active{
         background:var(--led-color, rgba(56,189,248,0.8));
     }
-    /* LED color test buttons */
-    .led-test-row{
+    /* Chord test buttons */
+    .chord-test-row{
         display:flex;justify-content:center;gap:6px;margin-top:12px;flex-wrap:wrap;
     }
-    .led-test-btn{
-        width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-        cursor:pointer;transition:transform 0.15s, box-shadow 0.15s;
+    .chord-btn{
+        padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);
+        background:rgba(255,255,255,0.05);color:var(--muted);
+        font-size:0.75em;font-weight:700;cursor:pointer;
+        transition:all 0.15s;
     }
-    .led-test-btn:hover{transform:scale(1.2);box-shadow:0 0 10px currentColor}
-    .led-test-btn.active-led{border-color:#fff;transform:scale(1.15)}
+    .chord-btn:hover{background:rgba(56,189,248,0.15);color:#fff;border-color:rgba(56,189,248,0.3)}
+    .chord-btn.active-chord{background:rgba(56,189,248,0.25);color:#fff;border-color:rgba(56,189,248,0.5);box-shadow:0 0 8px rgba(56,189,248,0.3)}
 
     /* ─── Category Nav ─── */
     .cat-nav{
@@ -335,10 +337,10 @@
     <div class="test-panel" id="testPanel">
         <div class="test-inner">
             <div class="test-title" data-i18n="testTitle">Press any key on your MIDI keyboard</div>
-            <div class="test-hint" data-i18n="testHint">Sound + LED feedback · Try different colors below</div>
+            <div class="test-hint" data-i18n="testHint">Press a key or tap a chord below to test sound + LED</div>
             <div class="test-note-name" id="testNoteName">—</div>
             <div class="piano-wrap"><div class="piano-keys" id="pianoKeys"></div></div>
-            <div class="led-test-row" id="ledTestRow"></div>
+            <div class="chord-test-row" id="chordTestRow"></div>
         </div>
     </div>
 
@@ -606,7 +608,7 @@ const i18n = {
         midiBrowser: "Use Chrome or Edge for Web MIDI",
         testToggle: "Test Your Keyboard",
         testTitle: "Press any key on your MIDI keyboard",
-        testHint: "Sound + LED feedback · Try different colors below",
+        testHint: "Press a key or tap a chord below to test sound + LED",
         catAll: "All", catAction: "Action", catRhythm: "Rhythm",
         catEar: "Ear Training", catCreative: "Creative", catMulti: "Multiplayer",
         secAction: "Action & Reflex", secActionCount: "5 games",
@@ -680,7 +682,7 @@ const i18n = {
         midiBrowser: "请使用 Chrome 或 Edge 浏览器",
         testToggle: "测试你的键盘",
         testTitle: "按下 MIDI 键盘上的任意键",
-        testHint: "声音 + LED 灯光反馈 · 试试下面不同的颜色",
+        testHint: "按键弹奏 或 点击下方和弦测试声音 + LED 灯光",
         catAll: "全部", catAction: "动作", catRhythm: "节奏",
         catEar: "听力训练", catCreative: "创作", catMulti: "多人",
         secAction: "动作 & 反应", secActionCount: "5 款游戏",
@@ -916,17 +918,13 @@ function initMidi() {
     midiState = 'checking';
     updateMidiText();
 
-    // Try without sysex first (Chrome grants this more easily)
-    // then upgrade to sysex for LED support
-    navigator.requestMIDIAccess().then(access => {
+    // Try sysex first — required for PartyKeys LED control (SysEx protocol)
+    // Falls back to basic MIDI if sysex denied (sound works, LEDs won't)
+    navigator.requestMIDIAccess({sysex:true}).then(access => {
         connectMidiAccess(access);
-        // Now try to upgrade to sysex silently for LED output in games
-        navigator.requestMIDIAccess({sysex:true}).then(sysAccess => {
-            connectMidiAccess(sysAccess);
-        }).catch(() => { /* sysex denied, basic MIDI still works */ });
     }).catch(() => {
-        // Basic MIDI also denied — try sysex as last resort (may trigger a prompt)
-        navigator.requestMIDIAccess({sysex:true}).then(access => {
+        // Sysex denied — try basic MIDI (LEDs won't work but sound will)
+        navigator.requestMIDIAccess().then(access => {
             connectMidiAccess(access);
         }).catch(() => {
             dot.className = 'midi-dot';
@@ -950,23 +948,48 @@ initMidi();
 
 // ═══ Keyboard Test Panel ═══
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const LED_COLORS = [
-    {name:'Red',    nameZh:'红',  vel:10,  css:'#ff4466'},
-    {name:'Green',  nameZh:'绿',  vel:30,  css:'#34d399'},
-    {name:'Blue',   nameZh:'蓝',  vel:50,  css:'#38bdf8'},
-    {name:'Yellow', nameZh:'黄',  vel:70,  css:'#fbbf24'},
-    {name:'Cyan',   nameZh:'青',  vel:90,  css:'#22d3ee'},
-    {name:'Purple', nameZh:'紫',  vel:110, css:'#a78bfa'},
-    {name:'White',  nameZh:'白',  vel:125, css:'#e2e8f0'},
+
+// ═══ PartyKeys SysEx LED Protocol ═══
+// Init command: enter note-light mode
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+// Header for light commands
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+// All-off command
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+// 12 colors: 01=red,02=red-orange,03=orange,04=dark-orange,05=amber,
+//            06=yellow-green,07=green,08=teal,09=blue,0A=dark-blue,0B=indigo,0C=purple
+const PK_COLOR = {
+    red:0x01, redOrange:0x02, orange:0x03, darkOrange:0x04, amber:0x05,
+    yellowGreen:0x06, green:0x07, teal:0x08, blue:0x09, darkBlue:0x0A,
+    indigo:0x0B, purple:0x0C
+};
+// CSS color equivalents for visual display
+const PK_COLOR_CSS = {
+    0x01:'#ff0000', 0x02:'#ff1a00', 0x03:'#ff5500', 0x04:'#ff8800',
+    0x05:'#ffaa00', 0x06:'#99ff12', 0x07:'#1cff3e', 0x08:'#26ffC0',
+    0x09:'#1060ff', 0x0A:'#0400fc', 0x0B:'#3824cc', 0x0C:'#9600ff'
+};
+let pkLedInited = false;
+
+// Chord definitions (semitone intervals from root)
+const TEST_CHORDS = [
+    {name:'C',  root:0,  intervals:[0,4,7],   type:'major',  color:PK_COLOR.blue},
+    {name:'Dm', root:2,  intervals:[0,3,7],   type:'minor',  color:PK_COLOR.green},
+    {name:'Em', root:4,  intervals:[0,3,7],   type:'minor',  color:PK_COLOR.teal},
+    {name:'F',  root:5,  intervals:[0,4,7],   type:'major',  color:PK_COLOR.amber},
+    {name:'G',  root:7,  intervals:[0,4,7],   type:'major',  color:PK_COLOR.orange},
+    {name:'Am', root:9,  intervals:[0,3,7],   type:'minor',  color:PK_COLOR.purple},
+    {name:'Bdim',root:11, intervals:[0,3,6],  type:'dim',    color:PK_COLOR.red},
 ];
-let testLedColor = 2; // default blue
+
 let testOpen = false;
 let audioCtx = null;
 let masterGain = null;
 const activeVoices = {};
+let activeChordIdx = -1;
 
 // Build visual piano (C3-B5, 36 keys)
-(function buildPiano(){
+(function buildUI(){
     const container = document.getElementById('pianoKeys');
     for(let n = 48; n <= 83; n++){
         const semi = n % 12;
@@ -976,42 +999,24 @@ const activeVoices = {};
         key.dataset.note = n;
         container.appendChild(key);
     }
-    // Build LED color buttons
-    const row = document.getElementById('ledTestRow');
-    LED_COLORS.forEach((c, i) => {
-        const btn = document.createElement('div');
-        btn.className = 'led-test-btn' + (i === testLedColor ? ' active-led' : '');
-        btn.style.background = c.css;
-        btn.style.color = c.css;
-        btn.title = c.name;
-        btn.onclick = () => selectLedColor(i);
+    // Build chord buttons
+    const row = document.getElementById('chordTestRow');
+    TEST_CHORDS.forEach((ch, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'chord-btn';
+        btn.textContent = ch.name;
+        btn.onclick = () => triggerChord(i);
         row.appendChild(btn);
     });
 })();
 
-function selectLedColor(idx){
-    testLedColor = idx;
-    document.querySelectorAll('.led-test-btn').forEach((b,i) =>
-        b.classList.toggle('active-led', i === idx));
-    // Light all currently held keys with new color
-    if(midiAccess){
-        const outputs = [...midiAccess.outputs.values()];
-        Object.keys(activeVoices).forEach(note => {
-            const n = parseInt(note);
-            outputs.forEach(o => o.send([0x90, n, LED_COLORS[idx].vel]));
-            highlightKey(n, true);
-        });
-    }
-}
-
 function initAudio(){
     if(audioCtx) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // Master gain + limiter
     masterGain = audioCtx.createGain();
-    masterGain.gain.value = 0.5;
+    masterGain.gain.value = 0.45;
     const comp = audioCtx.createDynamicsCompressor();
-    comp.threshold.value = -12;
+    comp.threshold.value = -10;
     comp.knee.value = 6;
     comp.ratio.value = 4;
     masterGain.connect(comp);
@@ -1022,28 +1027,81 @@ function toggleTestPanel(){
     testOpen = !testOpen;
     document.getElementById('testPanel').classList.toggle('open', testOpen);
     document.getElementById('testToggle').classList.toggle('open', testOpen);
-    if(testOpen) initAudio();
+    if(testOpen){
+        initAudio();
+        initPkLed(); // Enter note-light mode on PartyKeys
+    }
+    if(!testOpen){
+        // Closing: stop all sounds and clear all LEDs
+        Object.keys(activeVoices).forEach(n => stopNote(parseInt(n)));
+        clearAllTestLEDs();
+        clearAllHighlights();
+        activeChordIdx = -1;
+        pkLedInited = false;
+        document.querySelectorAll('.chord-btn').forEach(b => b.classList.remove('active-chord'));
+    }
 }
 
-function highlightKey(note, on){
+function highlightKey(note, on, color){
     const el = document.querySelector(`.p-key[data-note="${note}"]`);
     if(!el) return;
     if(on){
         el.classList.add('active');
-        el.style.setProperty('--led-color', LED_COLORS[testLedColor].css);
+        el.style.setProperty('--led-color', color || '#38bdf8');
     } else {
         el.classList.remove('active');
     }
 }
 
-function getNoteName(note){
-    const name = NOTE_NAMES[note % 12];
-    const octave = Math.floor(note / 12) - 1;
-    return name + octave;
+function clearAllHighlights(){
+    document.querySelectorAll('.p-key.active').forEach(k => k.classList.remove('active'));
 }
 
-// Piano synth — multi-harmonic with clean envelope
-// Uses setTargetAtTime (exponential approach) instead of mixing ramp types
+function getNoteName(note){
+    return NOTE_NAMES[note % 12] + (Math.floor(note / 12) - 1);
+}
+
+// ─── PartyKeys SysEx LED output ───
+// SysEx messages are completely separate from Note On/Off — no echo loop possible!
+
+function initPkLed(){
+    if(!midiAccess || pkLedInited) return;
+    midiAccess.outputs.forEach(o => o.send(PK_SYSEX_INIT));
+    pkLedInited = true;
+}
+
+function sendLedBatch(noteColorPairs){
+    // noteColorPairs: [[note, colorId], [note, colorId], ...]
+    if(!midiAccess || noteColorPairs.length === 0) return;
+    initPkLed();
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([note, color]) => { msg.push(note, color); });
+    msg.push(0xF7);
+    midiAccess.outputs.forEach(o => o.send(msg));
+}
+
+function sendLedOn(note, colorId){
+    if(!midiAccess) return;
+    initPkLed();
+    const msg = [...PK_SYSEX_HEAD, 0x01, note, colorId, 0xF7];
+    midiAccess.outputs.forEach(o => o.send(msg));
+}
+
+function sendLedOff(note){
+    if(!midiAccess) return;
+    initPkLed();
+    // Single note off: count=1, note, color=0
+    const msg = [...PK_SYSEX_HEAD, 0x01, note, 0x00, 0xF7];
+    midiAccess.outputs.forEach(o => o.send(msg));
+}
+
+function clearAllTestLEDs(){
+    if(!midiAccess) return;
+    initPkLed();
+    midiAccess.outputs.forEach(o => o.send(PK_SYSEX_ALLOFF));
+}
+
+// ─── Piano synth ───
 function playNote(note, velocity){
     if(!audioCtx) return;
     if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -1051,34 +1109,30 @@ function playNote(note, velocity){
 
     const t = audioCtx.currentTime;
     const freq = 440 * Math.pow(2, (note - 69) / 12);
-    const vol = (velocity / 127) * 0.4;
+    const vol = (velocity / 127) * 0.35;
 
-    // Envelope: setTargetAtTime is more stable than mixing linear/exponential ramps
     const env = audioCtx.createGain();
     env.gain.setValueAtTime(0.001, t);
-    env.gain.setTargetAtTime(vol, t, 0.003);           // ~3ms attack (smooth, no click)
-    env.gain.setTargetAtTime(vol * 0.35, t + 0.01, 0.08); // decay to 35% over ~80ms
-    env.gain.setTargetAtTime(0.001, t + 0.5, 0.6);        // slow release over ~600ms
+    env.gain.setTargetAtTime(vol, t, 0.003);
+    env.gain.setTargetAtTime(vol * 0.35, t + 0.01, 0.08);
+    env.gain.setTargetAtTime(0.001, t + 0.5, 0.6);
     env.connect(masterGain);
 
-    // 4 partials: fundamental + harmonics with per-partial gain nodes
-    const partials = [1.0, 0.3, 0.12, 0.04];
+    const partials = [1.0, 0.25, 0.10, 0.04];
     const oscs = partials.map((amp, i) => {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
         osc.type = 'sine';
         osc.frequency.value = freq * (i + 1);
         g.gain.setValueAtTime(amp, t);
-        // Higher partials decay faster using setTargetAtTime
-        if(i > 0) g.gain.setTargetAtTime(0.001, t + 0.05, 0.3 / (i + 1));
+        if(i > 0) g.gain.setTargetAtTime(0.001, t + 0.05, 0.25 / (i + 1));
         osc.connect(g);
         g.connect(env);
         osc.start(t);
-        osc.stop(t + 4); // auto-cleanup: stop after 4s even if note-off never comes
+        osc.stop(t + 4);
         return osc;
     });
 
-    // Auto-cleanup after natural decay
     const cleanup = setTimeout(() => { delete activeVoices[note]; }, 4200);
     activeVoices[note] = {oscs, env, cleanup};
 }
@@ -1089,7 +1143,6 @@ function stopNote(note){
     const t = audioCtx.currentTime;
     try {
         clearTimeout(v.cleanup);
-        // Quick release: approach 0 with ~30ms time constant, then hard stop
         v.env.gain.cancelScheduledValues(t);
         v.env.gain.setValueAtTime(v.env.gain.value || 0.001, t);
         v.env.gain.setTargetAtTime(0.0001, t, 0.03);
@@ -1098,66 +1151,91 @@ function stopNote(note){
     delete activeVoices[note];
 }
 
-// Send LED to keyboard (with echo suppression)
-const _ledSentAt = {}; // note → timestamp of last LED send
-function sendLed(note, on){
-    if(!midiAccess) return;
-    const outputs = [...midiAccess.outputs.values()];
-    if(on){
-        _ledSentAt[note] = Date.now();
-        outputs.forEach(o => o.send([0x90, note, LED_COLORS[testLedColor].vel]));
-    } else {
-        _ledSentAt[note] = Date.now();
-        outputs.forEach(o => o.send([0x80, note, 0]));
+// ─── Chord trigger ───
+function getChordMidiNotes(chord){
+    // Get all instances of chord notes across C3-B5 (48-83)
+    const notes = [];
+    for(let n = 48; n <= 83; n++){
+        const semi = n % 12;
+        if(chord.intervals.some(iv => (chord.root + iv) % 12 === semi)){
+            notes.push(n);
+        }
     }
+    return notes;
 }
 
-// Hook MIDI input for test panel
-let _boundInputIds = new Set();
-// LED velocity values used by our protocol — if incoming velocity matches exactly, it's an echo
-const _ledVelSet = new Set(LED_COLORS.map(c => c.vel)); // {10,30,50,70,90,110,125}
+function triggerChord(idx){
+    initAudio();
+    const chord = TEST_CHORDS[idx];
+    const notes = getChordMidiNotes(chord);
 
+    // Clear previous chord state
+    Object.keys(activeVoices).forEach(n => stopNote(parseInt(n)));
+    clearAllHighlights();
+    clearAllTestLEDs();
+
+    // Update button state
+    activeChordIdx = idx;
+    document.querySelectorAll('.chord-btn').forEach((b,i) =>
+        b.classList.toggle('active-chord', i === idx));
+
+    // Show chord name
+    const nameEl = document.getElementById('testNoteName');
+    nameEl.textContent = chord.name;
+    nameEl.style.color = '#34d399';
+
+    // Light up chord notes on visual keyboard + send LEDs + play sound
+    // Play just one voicing (one octave near middle)
+    const baseOctave = 60; // C4
+    const playNotes = chord.intervals.map(iv => baseOctave + chord.root + iv);
+
+    setTimeout(() => {
+        // Light ALL instances on keyboard via batch SysEx
+        const cssColor = PK_COLOR_CSS[chord.color] || '#34d399';
+        const pairs = notes.map(n => [n, chord.color]);
+        sendLedBatch(pairs);
+        notes.forEach(n => highlightKey(n, true, cssColor));
+        // Play just the compact voicing
+        playNotes.forEach((n, i) => {
+            setTimeout(() => playNote(n, 80), i * 30); // slight strum
+        });
+    }, 50); // small delay after clearing LEDs
+}
+
+// ─── MIDI input handler ───
+// SysEx LED commands are completely separate from Note On/Off — no echo issues!
 function handleMidiMsg(e){
     if(!testOpen) return;
-    if(e.data.length < 3) return; // ignore system messages (active sensing, clock, etc.)
+    if(!e.data || e.data.length < 3) return;
     const [status, note, vel] = e.data;
     const cmd = status & 0xf0;
+    if(cmd !== 0x90 && cmd !== 0x80) return;
 
     if(cmd === 0x90 && vel > 0){
-        // Suppress MIDI echo: if we sent an LED command to this note within 100ms
-        // AND the velocity matches one of our LED color values, it's our own echo
-        if(_ledSentAt[note] && (Date.now() - _ledSentAt[note] < 100) && _ledVelSet.has(vel)){
-            return; // echo from LED output, ignore
+        // Clear any chord display
+        if(activeChordIdx >= 0){
+            clearAllHighlights();
+            clearAllTestLEDs();
+            activeChordIdx = -1;
+            document.querySelectorAll('.chord-btn').forEach(b => b.classList.remove('active-chord'));
         }
-        highlightKey(note, true);
+        highlightKey(note, true, '#38bdf8');
+        // Light the pressed key on keyboard hardware too
+        sendLedOn(note, PK_COLOR.blue);
         document.getElementById('testNoteName').textContent = getNoteName(note);
-        document.getElementById('testNoteName').style.color = LED_COLORS[testLedColor].css;
+        document.getElementById('testNoteName').style.color = '#38bdf8';
         playNote(note, vel);
-        sendLed(note, true);
     } else if(cmd === 0x80 || (cmd === 0x90 && vel === 0)){
-        // Also suppress echo for note-off
-        if(_ledSentAt[note] && (Date.now() - _ledSentAt[note] < 100)){
-            return;
-        }
         highlightKey(note, false);
+        sendLedOff(note);
         stopNote(note);
-        sendLed(note, false);
     }
 }
 
 function setupTestMidiInput(){
     if(!midiAccess) return;
-    // Unbind all previous handlers to prevent double-triggering
-    _boundInputIds.forEach(id => {
-        midiAccess.inputs.forEach(input => {
-            if(input.id === id) input.onmidimessage = null;
-        });
-    });
-    _boundInputIds.clear();
-    // Bind fresh
     midiAccess.inputs.forEach(input => {
         input.onmidimessage = handleMidiMsg;
-        _boundInputIds.add(input.id);
     });
 }
 
@@ -1167,7 +1245,6 @@ scanMidiInputs = function(){
     _origScan();
     setupTestMidiInput();
 };
-// Also setup now if already connected
 setupTestMidiInput();
 </script>
 </body>

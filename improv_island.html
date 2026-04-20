@@ -250,6 +250,32 @@ input[type=range]::-webkit-slider-thumb {
 </div>
 
 <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
 // ============================================================
 // BACKING TRACKS
 // ============================================================
@@ -309,7 +335,7 @@ const BACKING_TRACKS = {
 // ============================================================
 // LED VELOCITIES
 // ============================================================
-const LED = { off: 0, red: 10, green: 30, blue: 50, yellow: 70, cyan: 90, purple: 110, white: 125 };
+const LED = {off:0, red:0x01, green:0x07, blue:0x09, yellow:0x05, cyan:0x08, purple:0x0C, white:0x06};
 
 // ============================================================
 // APP STATE
@@ -731,12 +757,14 @@ function updateLEDs(flash) {
 
 function sendLEDsToMIDI() {
     if (!midiAccess) return;
+    // Batch all LED states into one SysEx message
+    const pairs = [];
+    for (let i = 0; i < 36; i++) {
+        if (ledStates[i] > 0) pairs.push([48 + i, ledStates[i]]);
+    }
     midiAccess.outputs.forEach(output => {
-        for (let i = 0; i < 36; i++) {
-            const note = 48 + i;
-            const vel = ledStates[i];
-            output.send([0x90, note, vel]);
-        }
+        _pkAllOff(output); // clear first
+        if (pairs.length > 0) _pkSendLed(output, pairs);
     });
 }
 

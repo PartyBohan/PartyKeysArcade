@@ -167,6 +167,32 @@ canvas#mainCanvas { display:block; margin:0 auto 6px; border-radius:10px; border
 </div>
 
 <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
 // ============================================================
 // TEMPLATES
 // ============================================================
@@ -213,7 +239,7 @@ let cursorBeat = 0;
 let pressedKeys = new Set();
 let recordingNotes = {}; // currently held notes during recording {midiNote: {startBeat, velocity}}
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const LED_OFF=0, LED_RED=10, LED_GREEN=30, LED_BLUE=50, LED_YELLOW=70, LED_CYAN=90, LED_WHITE=125;
+const LED_OFF=0, LED_RED=0x01, LED_GREEN=0x07, LED_BLUE=0x09, LED_YELLOW=0x05, LED_CYAN=0x08, LED_WHITE=0x06;
 const MIDI_LOW = 48, MIDI_HIGH = 83; // C3 to B5
 
 // ============================================================
@@ -401,8 +427,8 @@ function handleMIDIMessage(e) {
 
 function sendLED(note, color) {
   if (!midiOutput || note < MIDI_LOW || note > MIDI_HIGH) return;
-  if (color > 0) { midiOutput.send([0x90, note, color]); }
-  else { midiOutput.send([0x80, note, 0]); }
+  if (color > 0) { _pkSendOne(midiOutput, note, color); }
+  else { _pkSendOne(midiOutput, note, 0); }
 }
 
 function clearAllLEDs() {

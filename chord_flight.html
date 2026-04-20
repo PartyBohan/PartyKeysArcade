@@ -559,6 +559,32 @@
     <div class="notif" id="notif"></div>
 
     <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
     // ═══════════════════════════════════════
     // CONSTANTS & CONFIG
     // ═══════════════════════════════════════
@@ -1046,14 +1072,14 @@
     // LED Protocol: Note On to MIDI output, velocity = color
     function setLED(midiNote, color) {
         if (!midiOutput) return;
-        const colorMap = { off:0, red:10, green:30, blue:50, yellow:70, cyan:90, purple:110, white:125 };
+        const colorMap = {off:0, red:0x01, green:0x07, blue:0x09, yellow:0x05, cyan:0x08, purple:0x0C, white:0x06};
         const vel = colorMap[color] || 0;
-        midiOutput.send(vel === 0 ? [0x80, midiNote, 0] : [0x90, midiNote, vel]);
+        _pkSendOne(midiOutput, midiNote, vel);
     }
 
     function clearAllLEDs() {
         if (!midiOutput) return;
-        for (let n = PK_START; n <= PK_END; n++) midiOutput.send([0x80, n, 0]);
+        for (let n = PK_START; n <= PK_END; n++) _pkSendOne(midiOutput, n, 0);
     }
 
     function lightUpChordLED(noteNames, color) {

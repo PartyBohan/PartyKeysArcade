@@ -139,6 +139,32 @@ body {
 </div>
 
 <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
 // ===================== PIECES DATA =====================
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 function nn(name, oct) {
@@ -360,7 +386,7 @@ function playSfx(type) {
 // ===================== MIDI =====================
 let midiAccess = null, midiInput = null, midiOutput = null;
 const heldNotes = new Set();
-const LED_OFF=0, LED_RED=10, LED_GREEN=30, LED_BLUE=50, LED_YELLOW=70, LED_CYAN=90, LED_PURPLE=110, LED_WHITE=125;
+const LED_OFF=0, LED_RED=0x01, LED_GREEN=0x07, LED_BLUE=0x09, LED_YELLOW=0x05, LED_CYAN=0x08, LED_PURPLE=0x0C, LED_WHITE=0x06;
 const ledState = {};
 
 async function initMIDI() {
@@ -436,9 +462,9 @@ function setLED(note, color) {
   if (ledState[note] === color) return;
   ledState[note] = color;
   if (color === 0) {
-    midiOutput.send([0x80, note, 0]);
+    _pkSendOne(midiOutput, note, 0);
   } else {
-    midiOutput.send([0x90, note, color]);
+    _pkSendOne(midiOutput, note, color);
   }
 }
 

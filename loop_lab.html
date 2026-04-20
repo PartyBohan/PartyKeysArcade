@@ -587,6 +587,32 @@ body {
 </div>
 
 <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
 // ============================================================
 //  LOOP LAB - Four-track live looper
 // ============================================================
@@ -633,7 +659,7 @@ function initAudio() {
 const TRACK_COLORS = ['#ff6b6b', '#60a5fa', '#fbbf24', '#34d399'];
 const TRACK_COLORS_DIM = ['rgba(255,107,107,0.3)', 'rgba(96,165,250,0.3)', 'rgba(251,191,36,0.3)', 'rgba(52,211,153,0.3)'];
 const TRACK_NAMES = ['Bass', 'Pad', 'Lead', 'Keys'];
-const LED_COLORS = { off: 0, red: 10, green: 30, blue: 50, yellow: 70, cyan: 90, purple: 110, white: 125 };
+const LED_COLORS = {off:0, red:0x01, green:0x07, blue:0x09, yellow:0x05, cyan:0x08, purple:0x0C, white:0x06};
 const TRACK_LED = [LED_COLORS.red, LED_COLORS.blue, LED_COLORS.yellow, LED_COLORS.green];
 const NOTE_MIN = 48, NOTE_MAX = 83;
 const NOTE_RANGE = NOTE_MAX - NOTE_MIN + 1;
@@ -697,7 +723,7 @@ function scanMIDI(access) {
 
 function sendLED(note, color) {
     if (!midiOutput) return;
-    try { midiOutput.send([0x90, note, color]); } catch (e) {}
+    try { _pkSendOne(midiOutput, note, color); } catch (e) {}
 }
 
 function clearAllLEDs() {

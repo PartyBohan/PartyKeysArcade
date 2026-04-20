@@ -196,13 +196,39 @@
 </div>
 
 <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  GROOVE KINGDOM — Build your kingdom one loop at a time
 // ═══════════════════════════════════════════════════════════════
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const MIDI_LO = 48, MIDI_HI = 83;
-const LED = { OFF:0, RED:10, GREEN:30, BLUE:50, YELLOW:70, CYAN:90, PURPLE:110, WHITE:125 };
+const LED = { OFF:0, RED:0x01, GREEN:0x07, BLUE:0x09, YELLOW:0x05, CYAN:0x08, PURPLE:0x0C, WHITE:0x06 };
 const WIN_COUNT = 20;
 
 const DIFF = {
@@ -439,9 +465,9 @@ function onMIDI(msg) {
 // LED
 function ledSet(n, c) {
     if (!midiOut || n < MIDI_LO || n > MIDI_HI) return;
-    midiOut.send(c ? [0x90, n, c] : [0x80, n, 0]);
+    _pkSendOne(midiOut, n, c);
 }
-function ledClear() { if (!midiOut) return; for (let n=MIDI_LO; n<=MIDI_HI; n++) midiOut.send([0x80,n,0]); }
+function ledClear() { if (!midiOut) return; for (let n=MIDI_LO; n<=MIDI_HI; n++) _pkSendOne(midiOut, n, 0); }
 function ledNotes(notes, c) { notes.forEach(n => { if(n>=MIDI_LO&&n<=MIDI_HI) ledSet(n,c); }); }
 
 function ledRainbow() {

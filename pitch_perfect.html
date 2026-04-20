@@ -370,6 +370,32 @@
 </div>
 
 <script>
+// ═══ PartyKeys SysEx LED Protocol ═══
+const PK_SYSEX_INIT = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x0F,0x05,0xF7];
+const PK_SYSEX_HEAD = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71];
+const PK_SYSEX_ALLOFF = [0xF0,0x05,0x30,0x7F,0x7F,0x20,0x00,0x71,0x00,0xF7];
+let _pkLedReady = false;
+function _pkLedInit(output){
+    if(!_pkLedReady && output){ output.send(PK_SYSEX_INIT); _pkLedReady = true; }
+}
+function _pkSendLed(output, noteColorPairs){
+    if(!output || noteColorPairs.length === 0) return;
+    _pkLedInit(output);
+    const msg = [...PK_SYSEX_HEAD, noteColorPairs.length];
+    noteColorPairs.forEach(([n, c]) => { msg.push(n, c); });
+    msg.push(0xF7);
+    output.send(msg);
+}
+function _pkSendOne(output, note, color){
+    if(!output) return;
+    _pkLedInit(output);
+    output.send([...PK_SYSEX_HEAD, 0x01, note, color, 0xF7]);
+}
+function _pkAllOff(output){
+    if(!output) return;
+    output.send(PK_SYSEX_ALLOFF);
+}
+
 // ============================================================
 // PITCH PERFECT - MIDI Ear Training Game
 // ============================================================
@@ -390,7 +416,7 @@ const CHORD_TYPES = {
 };
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const MIDI_MIN = 48, MIDI_MAX = 83;
-const LED_COLORS = {off:0, red:10, green:30, blue:50, yellow:70, cyan:90, purple:110, white:125};
+const LED_COLORS = {off:0, red:0x01, green:0x07, blue:0x09, yellow:0x05, cyan:0x08, purple:0x0C, white:0x06};
 const XP_THRESHOLDS = [
     {xp:0, label:'Basic Intervals', items:['m2','M2','m3','M3','P4','P5']},
     {xp:500, label:'Extended Intervals', items:['tritone','m6','M6','m7','M7','P8']},
@@ -606,8 +632,8 @@ function onMIDIMessage(e) {
 function sendLED(note, colorVel) {
     if (midiOutput) {
         try {
-            if (colorVel === 0) midiOutput.send([0x80, note, 0]);
-            else midiOutput.send([0x90, note, colorVel]);
+            if (colorVel === 0) _pkSendOne(midiOutput, note, 0);
+            else _pkSendOne(midiOutput, note, colorVel);
         } catch(e) {}
     }
 }
