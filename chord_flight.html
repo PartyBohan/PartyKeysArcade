@@ -1154,7 +1154,6 @@ function _pkAllOff(output){
         if (!noteOn && !noteOff) return;
 
         const noteName = NOTE_NAMES[note % 12];
-        console.log('[MIDI]', noteOn ? 'ON' : 'OFF', noteName, 'midi=' + note, 'running=' + game.running, 'stones=' + game.stones.length);
         if (noteOn) {
             initAudio();
             game.pressedNotes.add(noteName);
@@ -1183,24 +1182,21 @@ function _pkAllOff(output){
     }
 
     function registerNoteForChord(noteName) {
-        if (!game.running) { console.log('[MATCH] game not running, skip'); return; }
-        console.log('[MATCH] registerNote:', noteName, 'stones:', game.stones.length);
-        for (let i = game.stones.length - 1; i >= 0; i--) {
+        if (!game.running) return;
+        // Iterate oldest→newest (index 0 = oldest/leftmost on screen)
+        // Only register to the FIRST stone that needs this note, so duplicates are consumed one at a time
+        for (let i = 0; i < game.stones.length; i++) {
             const stone = game.stones[i];
             if (stone.dying) continue;
             const required = chordToNoteNames(stone.chord);
-            console.log('[MATCH] stone[' + i + '] chord=' + stone.chord.name, 'required=' + required.join(','), 'matched=' + [...stone.matchedNotes].join(','), 'x=' + Math.round(stone.x));
-            // If this note belongs to this chord, record it
-            if (required.includes(noteName)) {
-                stone.matchedNotes.add(noteName);
-                console.log('[MATCH] ✓ added', noteName, '→ matched now:', [...stone.matchedNotes].join(','));
-            }
+            if (!required.includes(noteName)) continue;
+            // This stone needs this note — register it here and nowhere else
+            stone.matchedNotes.add(noteName);
             // All notes matched → chord complete!
             if (required.every(n => stone.matchedNotes.has(n))) {
-                console.log('[MATCH] ★ CHORD COMPLETE! destroying stone[' + i + ']');
                 destroyStone(i);
-                break;
             }
+            break; // Only affect the first eligible stone
         }
     }
 
@@ -1469,7 +1465,7 @@ function _pkAllOff(output){
         game.floatingTexts = [];
         game.planeY = 180;
         game.planeTargetY = 180;
-        game.lastSpawn = performance.now();
+        game.lastSpawn = performance.now() - 9999; // First stone spawns immediately
         game.spawnInterval = game.difficulty === 'easy' ? 3000 : game.difficulty === 'medium' ? 2400 : 1800;
         game.stoneSpeed = game.difficulty === 'easy' ? 1.0 : game.difficulty === 'medium' ? 1.4 : 1.8;
         game.frameCount = 0;
