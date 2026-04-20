@@ -90,6 +90,72 @@
     .midi-dot.on{background:#34d399;box-shadow:0 0 10px #34d399;animation:pulse 1.6s infinite}
     .midi-dot.trying{background:#fbbf24;box-shadow:0 0 8px #fbbf24;animation:pulse 0.8s infinite}
 
+    /* ─── Keyboard Test Panel ─── */
+    .test-panel{
+        max-width:800px;margin:20px auto 0;padding:0 20px;
+        overflow:hidden;transition:max-height 0.4s ease, opacity 0.3s;
+        max-height:0;opacity:0;
+    }
+    .test-panel.open{max-height:260px;opacity:1}
+    .test-toggle{
+        display:flex;align-items:center;justify-content:center;gap:8px;
+        max-width:320px;margin:16px auto 0;
+        background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);
+        border-radius:12px;padding:8px 20px;cursor:pointer;
+        color:var(--accent);font-size:0.8em;font-weight:600;
+        transition:all 0.2s;
+    }
+    .test-toggle:hover{background:rgba(56,189,248,0.15);border-color:rgba(56,189,248,0.4)}
+    .test-toggle .chevron{transition:transform 0.3s;display:inline-block}
+    .test-toggle.open .chevron{transform:rotate(180deg)}
+    .test-inner{
+        background:rgba(15,16,41,0.6);border:1px solid var(--card-border);
+        border-radius:16px;padding:20px 16px 16px;text-align:center;
+    }
+    .test-title{font-size:0.85em;font-weight:700;margin-bottom:4px;color:var(--text)}
+    .test-hint{font-size:0.7em;color:var(--muted);margin-bottom:14px}
+    .test-note-name{
+        font-size:1.6em;font-weight:800;height:44px;line-height:44px;
+        color:var(--accent);margin-bottom:10px;
+        transition:color 0.15s;
+    }
+    /* Visual keyboard */
+    .piano-wrap{
+        display:flex;justify-content:center;position:relative;
+        height:80px;user-select:none;
+    }
+    .piano-keys{display:flex;position:relative;height:100%}
+    .p-key{
+        width:20px;height:72px;border-radius:0 0 4px 4px;
+        border:1px solid rgba(255,255,255,0.1);
+        background:rgba(255,255,255,0.08);
+        position:relative;flex-shrink:0;
+        transition:background 0.08s, box-shadow 0.08s;
+    }
+    .p-key.black{
+        width:14px;height:46px;
+        background:rgba(0,0,0,0.6);border-color:rgba(255,255,255,0.05);
+        margin-left:-7px;margin-right:-7px;z-index:2;
+        border-radius:0 0 3px 3px;
+    }
+    .p-key.active{
+        background:var(--led-color, rgba(56,189,248,0.7));
+        box-shadow:0 0 12px var(--led-color, rgba(56,189,248,0.5));
+    }
+    .p-key.black.active{
+        background:var(--led-color, rgba(56,189,248,0.8));
+    }
+    /* LED color test buttons */
+    .led-test-row{
+        display:flex;justify-content:center;gap:6px;margin-top:12px;flex-wrap:wrap;
+    }
+    .led-test-btn{
+        width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
+        cursor:pointer;transition:transform 0.15s, box-shadow 0.15s;
+    }
+    .led-test-btn:hover{transform:scale(1.2);box-shadow:0 0 10px currentColor}
+    .led-test-btn.active-led{border-color:#fff;transform:scale(1.15)}
+
     /* ─── Category Nav ─── */
     .cat-nav{
         display:flex;justify-content:center;gap:8px;flex-wrap:wrap;
@@ -256,6 +322,23 @@
         <div class="midi-bar" id="midiBar" onclick="retryMidi()">
             <span class="midi-dot" id="midiDot"></span>
             <span id="midiText" data-i18n="midiChecking">Checking MIDI…</span>
+        </div>
+    </div>
+
+    <!-- Keyboard Test Toggle -->
+    <div class="test-toggle" id="testToggle" onclick="toggleTestPanel()">
+        <span data-i18n="testToggle">Test Your Keyboard</span>
+        <span class="chevron">▼</span>
+    </div>
+
+    <!-- Keyboard Test Panel -->
+    <div class="test-panel" id="testPanel">
+        <div class="test-inner">
+            <div class="test-title" data-i18n="testTitle">Press any key on your MIDI keyboard</div>
+            <div class="test-hint" data-i18n="testHint">Sound + LED feedback · Try different colors below</div>
+            <div class="test-note-name" id="testNoteName">—</div>
+            <div class="piano-wrap"><div class="piano-keys" id="pianoKeys"></div></div>
+            <div class="led-test-row" id="ledTestRow"></div>
         </div>
     </div>
 
@@ -521,6 +604,9 @@ const i18n = {
         midiPrompt: "No MIDI device found — click to retry",
         midiAllow: "MIDI access denied — click to retry",
         midiBrowser: "Use Chrome or Edge for Web MIDI",
+        testToggle: "Test Your Keyboard",
+        testTitle: "Press any key on your MIDI keyboard",
+        testHint: "Sound + LED feedback · Try different colors below",
         catAll: "All", catAction: "Action", catRhythm: "Rhythm",
         catEar: "Ear Training", catCreative: "Creative", catMulti: "Multiplayer",
         secAction: "Action & Reflex", secActionCount: "5 games",
@@ -592,6 +678,9 @@ const i18n = {
         midiPrompt: "未检测到 MIDI 设备 — 点击重试",
         midiAllow: "MIDI 权限被拒绝 — 点击重试",
         midiBrowser: "请使用 Chrome 或 Edge 浏览器",
+        testToggle: "测试你的键盘",
+        testTitle: "按下 MIDI 键盘上的任意键",
+        testHint: "声音 + LED 灯光反馈 · 试试下面不同的颜色",
         catAll: "全部", catAction: "动作", catRhythm: "节奏",
         catEar: "听力训练", catCreative: "创作", catMulti: "多人",
         secAction: "动作 & 反应", secActionCount: "5 款游戏",
@@ -855,7 +944,176 @@ function retryMidi() {
 // Auto-init on load
 initMidi();
 
-// Card hover effect handled by CSS only (no DOM particle creation)
+// ═══ Keyboard Test Panel ═══
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const LED_COLORS = [
+    {name:'Red',    nameZh:'红',  vel:10,  css:'#ff4466'},
+    {name:'Green',  nameZh:'绿',  vel:30,  css:'#34d399'},
+    {name:'Blue',   nameZh:'蓝',  vel:50,  css:'#38bdf8'},
+    {name:'Yellow', nameZh:'黄',  vel:70,  css:'#fbbf24'},
+    {name:'Cyan',   nameZh:'青',  vel:90,  css:'#22d3ee'},
+    {name:'Purple', nameZh:'紫',  vel:110, css:'#a78bfa'},
+    {name:'White',  nameZh:'白',  vel:125, css:'#e2e8f0'},
+];
+let testLedColor = 2; // default blue
+let testOpen = false;
+let audioCtx = null;
+const activeOsc = {};
+
+// Build visual piano (C3-B5, 36 keys)
+(function buildPiano(){
+    const container = document.getElementById('pianoKeys');
+    for(let n = 48; n <= 83; n++){
+        const semi = n % 12;
+        const isBlack = [1,3,6,8,10].includes(semi);
+        const key = document.createElement('div');
+        key.className = 'p-key' + (isBlack ? ' black' : '');
+        key.dataset.note = n;
+        container.appendChild(key);
+    }
+    // Build LED color buttons
+    const row = document.getElementById('ledTestRow');
+    LED_COLORS.forEach((c, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'led-test-btn' + (i === testLedColor ? ' active-led' : '');
+        btn.style.background = c.css;
+        btn.style.color = c.css;
+        btn.title = c.name;
+        btn.onclick = () => selectLedColor(i);
+        row.appendChild(btn);
+    });
+})();
+
+function selectLedColor(idx){
+    testLedColor = idx;
+    document.querySelectorAll('.led-test-btn').forEach((b,i) =>
+        b.classList.toggle('active-led', i === idx));
+    // Light all currently held keys with new color
+    if(midiAccess){
+        const outputs = [...midiAccess.outputs.values()];
+        Object.keys(activeOsc).forEach(note => {
+            const n = parseInt(note);
+            outputs.forEach(o => o.send([0x90, n, LED_COLORS[idx].vel]));
+            highlightKey(n, true);
+        });
+    }
+}
+
+function toggleTestPanel(){
+    testOpen = !testOpen;
+    document.getElementById('testPanel').classList.toggle('open', testOpen);
+    document.getElementById('testToggle').classList.toggle('open', testOpen);
+    // Init audio context on first open (needs user gesture)
+    if(testOpen && !audioCtx){
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function highlightKey(note, on){
+    const el = document.querySelector(`.p-key[data-note="${note}"]`);
+    if(!el) return;
+    if(on){
+        el.classList.add('active');
+        el.style.setProperty('--led-color', LED_COLORS[testLedColor].css);
+    } else {
+        el.classList.remove('active');
+    }
+}
+
+function getNoteName(note){
+    const name = NOTE_NAMES[note % 12];
+    const octave = Math.floor(note / 12) - 1;
+    return name + octave;
+}
+
+// Simple piano synth
+function playNote(note, velocity){
+    if(!audioCtx) return;
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const freq = 440 * Math.pow(2, (note - 69) / 12);
+    const gain = audioCtx.createGain();
+    gain.connect(audioCtx.destination);
+    const vol = (velocity / 127) * 0.35;
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(vol * 0.6, audioCtx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0);
+
+    const osc = audioCtx.createOscillator();
+    // Harmonics for richer tone
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    gain2.gain.value = 0.15;
+    gain2.connect(gain);
+
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    osc2.type = 'sine';
+    osc2.frequency.value = freq * 2;
+    osc2.connect(gain2);
+
+    osc.start(); osc2.start();
+    activeOsc[note] = {osc, osc2, gain, gain2, t: audioCtx.currentTime};
+}
+
+function stopNote(note){
+    const o = activeOsc[note];
+    if(!o) return;
+    const now = audioCtx ? audioCtx.currentTime : 0;
+    try {
+        o.gain.gain.cancelScheduledValues(now);
+        o.gain.gain.setValueAtTime(o.gain.gain.value, now);
+        o.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        o.osc.stop(now + 0.2);
+        o.osc2.stop(now + 0.2);
+    } catch(e){}
+    delete activeOsc[note];
+}
+
+// Send LED to keyboard
+function sendLed(note, on){
+    if(!midiAccess) return;
+    const outputs = [...midiAccess.outputs.values()];
+    if(on){
+        outputs.forEach(o => o.send([0x90, note, LED_COLORS[testLedColor].vel]));
+    } else {
+        outputs.forEach(o => o.send([0x80, note, 0]));
+    }
+}
+
+// Hook MIDI input for test panel
+function setupTestMidiInput(){
+    if(!midiAccess) return;
+    midiAccess.inputs.forEach(input => {
+        input.onmidimessage = (e) => {
+            if(!testOpen) return;
+            const [status, note, vel] = e.data;
+            const cmd = status & 0xf0;
+            if(cmd === 0x90 && vel > 0){
+                // Note On
+                highlightKey(note, true);
+                document.getElementById('testNoteName').textContent = getNoteName(note);
+                document.getElementById('testNoteName').style.color = LED_COLORS[testLedColor].css;
+                playNote(note, vel);
+                sendLed(note, true);
+            } else if(cmd === 0x80 || (cmd === 0x90 && vel === 0)){
+                // Note Off
+                highlightKey(note, false);
+                stopNote(note);
+                sendLed(note, false);
+            }
+        };
+    });
+}
+
+// Re-wire test input whenever MIDI devices change
+const _origScan = scanMidiInputs;
+scanMidiInputs = function(){
+    _origScan();
+    setupTestMidiInput();
+};
+// Also setup now if already connected
+setupTestMidiInput();
 </script>
 </body>
 </html>
