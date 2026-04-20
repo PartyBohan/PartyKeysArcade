@@ -1153,15 +1153,9 @@ function stopNote(note){
 
 // ─── Chord trigger ───
 function getChordMidiNotes(chord){
-    // Get all instances of chord notes across C3-B5 (48-83)
-    const notes = [];
-    for(let n = 48; n <= 83; n++){
-        const semi = n % 12;
-        if(chord.intervals.some(iv => (chord.root + iv) % 12 === semi)){
-            notes.push(n);
-        }
-    }
-    return notes;
+    // Single voicing near middle C (C4=60), only 3 keys
+    const base = 60 + chord.root;
+    return chord.intervals.map(iv => base + iv);
 }
 
 function triggerChord(idx){

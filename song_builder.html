@@ -443,21 +443,36 @@ function updateLEDs() {
   const scale = currentTemplate.scale;
   const keyOff = currentTemplate.keyOffset;
 
-  for (let n = MIDI_LOW; n <= MIDI_HIGH; n++) {
-    const pc = ((n - keyOff) % 12 + 12) % 12;
-    const isChordTone = chordTones.some(ct => ((ct % 12 + 12) % 12) === pc);
-    const isScaleTone = scale.includes(pc);
-    const isRoot = chordTones.length > 0 && ((chordTones[0] % 12 + 12) % 12) === pc;
-    const isFifth = chordTones.length > 2 && ((chordTones[2] % 12 + 12) % 12) === pc;
+  // Single voicing near C4 — only light 3 chord keys
+  const rootPC = chordTones.length > 0 ? ((chordTones[0] % 12 + 12) % 12) : 0;
+  const base = 60 + rootPC + keyOff; // root near C4, adjusted for key
 
-    if (currentStage === 0) { // Bass
-      if (isRoot) sendLED(n, LED_RED);
-      else if (isFifth) sendLED(n, LED_YELLOW);
-    } else if (currentStage === 1) { // Chords
-      if (isChordTone) sendLED(n, LED_GREEN);
-    } else { // Melody
-      if (isChordTone) sendLED(n, LED_GREEN);
-      else if (isScaleTone) sendLED(n, LED_CYAN);
+  if (currentStage === 0) { // Bass — light root + fifth only
+    if (chordTones.length > 0) {
+      const rootN = base;
+      if (rootN >= MIDI_LOW && rootN <= MIDI_HIGH) sendLED(rootN, LED_RED);
+      if (chordTones.length > 2) {
+        const fifthN = base + ((chordTones[2] - chordTones[0] + 12) % 12);
+        if (fifthN >= MIDI_LOW && fifthN <= MIDI_HIGH) sendLED(fifthN, LED_YELLOW);
+      }
+    }
+  } else if (currentStage === 1) { // Chords — light chord tones
+    chordTones.forEach((ct, i) => {
+      const n = base + ((ct - chordTones[0] + 12) % 12);
+      if (n >= MIDI_LOW && n <= MIDI_HIGH) sendLED(n, LED_GREEN);
+    });
+  } else { // Melody — light chord tones + scale hint
+    chordTones.forEach((ct, i) => {
+      const n = base + ((ct - chordTones[0] + 12) % 12);
+      if (n >= MIDI_LOW && n <= MIDI_HIGH) sendLED(n, LED_GREEN);
+    });
+    // Also light scale notes in the same octave area as subtle hints
+    for (let n = base - 5; n <= base + 12; n++) {
+      if (n < MIDI_LOW || n > MIDI_HIGH) continue;
+      const pc = ((n - keyOff) % 12 + 12) % 12;
+      if (scale.includes(pc) && !chordTones.some(ct => ((ct % 12 + 12) % 12) === pc)) {
+        sendLED(n, LED_CYAN);
+      }
     }
   }
 }

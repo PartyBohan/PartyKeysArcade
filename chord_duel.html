@@ -664,26 +664,15 @@ function beginPlayerAttack() {
         playerHP = Math.min(playerHP + healPerTurn, playerMaxHP);
         spawnFloatingText('+' + healPerTurn + ' HP', 200, 300, '#44ff88');
     }
-    // LED: light valid chord root notes in white, weakness chord tones in cyan
+    // LED: light weakness chord type — single voicing at C4 (3 keys only)
     clearAllLEDs();
     const weakIntervals = CHORD_TYPES[currentBoss.weakness];
-    // Light all natural roots (C, D, E, F, G, A, B) in white as hint
-    const naturalPCs = [0, 2, 4, 5, 7, 9, 11];
-    for (let n = MIDI_MIN; n <= MIDI_MAX; n++) {
-        if (naturalPCs.includes(n % 12)) {
-            setLED(n, LED_COLORS.white);
-        }
-    }
-    // Overlay weakness chord tones for every possible root in cyan
     if (weakIntervals) {
-        for (let root = MIDI_MIN; root <= MIDI_MAX; root++) {
-            const allFit = weakIntervals.every(iv => (root + iv) >= MIDI_MIN && (root + iv) <= MIDI_MAX);
-            if (allFit) {
-                weakIntervals.forEach(iv => {
-                    setLED(root + iv, LED_COLORS.cyan);
-                });
-            }
-        }
+        const base = 60; // C4 as example root
+        weakIntervals.forEach(iv => {
+            const n = base + iv;
+            if (n >= MIDI_MIN && n <= MIDI_MAX) setLED(n, LED_COLORS.cyan);
+        });
     }
 }
 

@@ -730,14 +730,24 @@ function classifyNote(midiNote) {
 
 function updateLEDs(flash) {
     const keys = document.querySelectorAll('.piano-key');
+    // Build single-voicing chord note set (3 keys near C4)
+    const chordMidiSet = new Set();
+    if (currentChord) {
+        const base = 60 + currentChord.root;
+        currentChord.intervals.forEach(iv => {
+            const n = base + iv;
+            if (n >= 48 && n <= 83) chordMidiSet.add(n);
+        });
+    }
     for (let i = 0; i < 36; i++) {
         const midiNote = 48 + i;
-        const cat = classifyNote(midiNote);
         let ledClass = 'off';
-        if (cat === 'chord') ledClass = flash ? 'white' : 'green';
-        else if (cat === 'scale') ledClass = 'cyan';
-        else ledClass = 'off';
-        ledStates[i] = cat === 'chord' ? LED.green : (cat === 'scale' ? LED.cyan : LED.off);
+        let ledColor = LED.off;
+        if (chordMidiSet.has(midiNote)) {
+            ledClass = flash ? 'white' : 'green';
+            ledColor = flash ? LED.white : LED.green;
+        }
+        ledStates[i] = ledColor;
         const key = keys[i];
         if (key) {
             const led = key.querySelector('.key-led');

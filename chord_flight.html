@@ -1083,13 +1083,18 @@ function _pkAllOff(output){
     }
 
     function lightUpChordLED(noteNames, color) {
-        noteNames.forEach(name => {
-            const idx = NOTE_NAMES.indexOf(name);
-            if (idx < 0) return;
-            for (let oct = 0; oct < 10; oct++) {
-                const midi = (oct + 1) * 12 + idx;
-                if (midi >= PK_START && midi <= PK_END) setLED(midi, color);
+        // Single voicing near C4 (60) — only light 3 keys
+        const root = NOTE_NAMES.indexOf(noteNames[0]);
+        if (root < 0) return;
+        const base = 60 + root; // root near C4
+        noteNames.forEach((name, i) => {
+            let midi;
+            if (i === 0) { midi = base; }
+            else {
+                const offset = (NOTE_NAMES.indexOf(name) - root + 12) % 12;
+                midi = base + offset;
             }
+            if (midi >= PK_START && midi <= PK_END) setLED(midi, color);
         });
     }
 
