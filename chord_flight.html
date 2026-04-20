@@ -1082,11 +1082,19 @@ function _pkAllOff(output){
         _pkAllOff(midiOutput);
     }
 
+    // Get MIDI note numbers for a chord in single voicing near C4
+    function chordToMidiNotes(chord) {
+        const rootIdx = NOTE_NAMES.indexOf(chord.root);
+        if (rootIdx < 0) return [];
+        const base = 60 + rootIdx;
+        return CHORD_TYPES[chord.type].map(iv => base + iv);
+    }
+
     function lightUpChordLED(noteNames, color) {
         // Single voicing near C4 (60) — only light 3 keys
         const root = NOTE_NAMES.indexOf(noteNames[0]);
         if (root < 0) return;
-        const base = 60 + root; // root near C4
+        const base = 60 + root;
         noteNames.forEach((name, i) => {
             let midi;
             if (i === 0) { midi = base; }
@@ -1096,6 +1104,16 @@ function _pkAllOff(output){
             }
             if (midi >= PK_START && midi <= PK_END) setLED(midi, color);
         });
+    }
+
+    // Highlight chord on virtual keyboard by specific MIDI notes (3 keys only)
+    function highlightChordVirtualKeys(chord, cls) {
+        const midiNotes = chordToMidiNotes(chord);
+        midiNotes.forEach(m => highlightVirtualKeyMidi(m, cls));
+    }
+    function clearChordVirtualKeys(chord) {
+        const midiNotes = chordToMidiNotes(chord);
+        midiNotes.forEach(m => clearVirtualKeyMidi(m));
     }
 
     // ═══════════════════════════════════════
@@ -1114,16 +1132,17 @@ function _pkAllOff(output){
             game.pressedNotes.add(noteName);
             game.pressedMidi.add(note);
             playMidiNote(note);
-            highlightVirtualKey(noteName, 'led-active');
+            highlightVirtualKeyMidi(note, 'led-active');
             // Move plane
             const pos = (note - PK_START) / (PK_END - PK_START);
             game.planeTargetY = 340 - pos * 320;
-            if (game.running) setTimeout(() => checkChordMatch(), 60);
+            // Immediately register this note for chord matching
+            if (game.running) registerNoteForChord(noteName);
         } else {
             game.pressedNotes.delete(noteName);
             game.pressedMidi.delete(note);
             stopMidiNote(note);
-            clearVirtualKey(noteName);
+            clearVirtualKeyMidi(note);
         }
     }
 
@@ -1135,17 +1154,16 @@ function _pkAllOff(output){
         return CHORD_TYPES[chord.type].map(i => NOTE_NAMES[(rootIdx + i) % 12]);
     }
 
-    function checkChordMatch() {
+    function registerNoteForChord(noteName) {
         if (!game.running) return;
-        const pressed = game.pressedNotes;
         for (let i = game.stones.length - 1; i >= 0; i--) {
             const stone = game.stones[i];
             if (stone.dying) continue;
             const required = chordToNoteNames(stone.chord);
-            // Sequential matching: each correct note pressed adds to matchedNotes
-            pressed.forEach(n => {
-                if (required.includes(n)) stone.matchedNotes.add(n);
-            });
+            // If this note belongs to this chord, record it
+            if (required.includes(noteName)) {
+                stone.matchedNotes.add(noteName);
+            }
             // All notes matched → chord complete!
             if (required.every(n => stone.matchedNotes.has(n))) {
                 destroyStone(i);
@@ -1255,13 +1273,13 @@ function _pkAllOff(output){
         // Particles
         spawnParticles(stone.x, stone.y, stone.color, 20);
 
-        // Flash keyboard green + LED
-        const notes = chordToNoteNames(stone.chord);
-        notes.forEach(n => highlightVirtualKey(n, 'led-active'));
-        lightUpChordLED(notes, 'green');
+        // Flash keyboard green + LED (specific 3 keys only)
+        highlightChordVirtualKeys(stone.chord, 'led-active');
+        lightUpChordLED(chordToNoteNames(stone.chord), 'green');
+        const _chord = stone.chord;
         setTimeout(() => {
-            notes.forEach(n => clearVirtualKey(n));
-            lightUpChordLED(notes, 'off');
+            clearChordVirtualKeys(_chord);
+            lightUpChordLED(chordToNoteNames(_chord), 'off');
         }, 400);
 
         // Score floating text
@@ -1317,28 +1335,38 @@ function _pkAllOff(output){
                 game.pressedNotes.add(noteName);
                 game.pressedMidi.add(midi);
                 playMidiNote(midi);
-                highlightVirtualKey(noteName, 'led-active');
+                highlightVirtualKeyMidi(midi, 'led-active');
                 const pos = (midi - PK_START) / (PK_END - PK_START);
                 game.planeTargetY = 340 - pos * 320;
-                if (game.running) setTimeout(() => checkChordMatch(), 60);
+                if (game.running) registerNoteForChord(noteName);
             });
             key.addEventListener('mouseup', () => {
                 game.pressedNotes.delete(noteName);
                 game.pressedMidi.delete(midi);
                 stopMidiNote(midi);
-                clearVirtualKey(noteName);
+                clearVirtualKeyMidi(midi);
             });
             kb.appendChild(key);
         }
     }
 
-    function highlightVirtualKey(noteName, cls) {
-        document.querySelectorAll('.key').forEach(k => {
-            if (k.dataset.noteName === noteName) {
-                k.classList.remove('led-hint','led-active','led-danger');
-                k.classList.add(cls);
-            }
+    function highlightVirtualKey(noteNameOrMidi, cls) {
+        // Accept either note name string or MIDI number
+        const selector = typeof noteNameOrMidi === 'number'
+            ? `.key[data-midi="${noteNameOrMidi}"]`
+            : `.key[data-note-name="${noteNameOrMidi}"]`;
+        document.querySelectorAll(selector).forEach(k => {
+            k.classList.remove('led-hint','led-active','led-danger');
+            k.classList.add(cls);
         });
+    }
+    function highlightVirtualKeyMidi(midi, cls) {
+        const k = document.querySelector(`.key[data-midi="${midi}"]`);
+        if (k) { k.classList.remove('led-hint','led-active','led-danger'); k.classList.add(cls); }
+    }
+    function clearVirtualKeyMidi(midi) {
+        const k = document.querySelector(`.key[data-midi="${midi}"]`);
+        if (k) k.classList.remove('led-hint','led-active','led-danger');
     }
     function clearVirtualKey(noteName) {
         document.querySelectorAll('.key').forEach(k => {
@@ -1494,13 +1522,13 @@ function _pkAllOff(output){
                 const tier = STONE_TIERS[s.chord.type] || STONE_TIERS['major'];
                 takeDamage(tier.damage, s);
 
-                // Flash keyboard red
-                const notes = chordToNoteNames(s.chord);
-                notes.forEach(n => highlightVirtualKey(n, 'led-danger'));
-                lightUpChordLED(notes, 'red');
+                // Flash keyboard red (specific 3 keys only)
+                highlightChordVirtualKeys(s.chord, 'led-danger');
+                lightUpChordLED(chordToNoteNames(s.chord), 'red');
+                const _missChord = s.chord;
                 setTimeout(() => {
-                    notes.forEach(n => clearVirtualKey(n));
-                    lightUpChordLED(notes, 'off');
+                    clearChordVirtualKeys(_missChord);
+                    lightUpChordLED(chordToNoteNames(_missChord), 'off');
                 }, 500);
 
                 spawnParticles(s.x, s.y + s.wobble, '#ff4444', 12);
@@ -1511,18 +1539,16 @@ function _pkAllOff(output){
                 continue;
             }
 
-            // Hint: light up keyboard when stone is mid-screen
+            // Hint: light up keyboard when stone is mid-screen (specific 3 keys only)
             if (s.x < 450 && s.x > 380 && !s.hinted) {
                 s.hinted = true;
-                const notes = chordToNoteNames(s.chord);
-                notes.forEach(n => highlightVirtualKey(n, 'led-hint'));
-                lightUpChordLED(notes, 'blue');
+                highlightChordVirtualKeys(s.chord, 'led-hint');
+                lightUpChordLED(chordToNoteNames(s.chord), 'blue');
             }
             if (s.x < 180 && s.hinted && !s.urgentHinted) {
                 s.urgentHinted = true;
-                const notes = chordToNoteNames(s.chord);
-                notes.forEach(n => highlightVirtualKey(n, 'led-danger'));
-                lightUpChordLED(notes, 'yellow');
+                highlightChordVirtualKeys(s.chord, 'led-danger');
+                lightUpChordLED(chordToNoteNames(s.chord), 'yellow');
             }
         }
 
