@@ -245,7 +245,7 @@
     <!-- HERO -->
     <div class="hero">
         <div class="hero-badge"><span class="dot-live"></span> <span data-i18n="badge">ALL GAMES LIVE</span></div>
-        <div class="hero-title">PartyKeys Arcade</div>
+        <div class="hero-title" data-i18n="heroTitle">PartyKeys Arcade</div>
         <div class="hero-sub" data-i18n="heroSub">Plug in your PartyKeys. Pick a game. Play.</div>
         <div class="hero-stats">
             <div class="hero-stat"><div class="hero-stat-val">16</div><div class="hero-stat-label" data-i18n="statGames">Games</div></div>
@@ -502,7 +502,7 @@
 
     <!-- Footer -->
     <div class="footer">
-        <b>PartyKeys Arcade</b> · <span data-i18n="footer">16 games · Web MIDI on Chrome / Edge · 36 keys C3–B5</span>
+        <b data-i18n="footerBrand">PartyKeys Arcade</b> · <span data-i18n="footer">16 games · Web MIDI on Chrome / Edge · 36 keys C3–B5</span>
     </div>
 </div>
 
@@ -511,7 +511,9 @@
 const i18n = {
     en: {
         badge: "ALL GAMES LIVE",
+        heroTitle: "PartyKeys Arcade",
         heroSub: "Plug in your PartyKeys. Pick a game. Play.",
+        footerBrand: "PartyKeys Arcade",
         statGames: "Games", statKeys: "Keys", statLED: "LED Colors", statCat: "Categories",
         midiChecking: "Connecting MIDI…",
         midiConnected: "PartyKeys connected",
@@ -580,10 +582,12 @@ const i18n = {
     },
     zh: {
         badge: "全部游戏已上线",
-        heroSub: "连接你的 PartyKeys，选个游戏，开始弹奏。",
+        heroTitle: "音乐密码游戏厅",
+        heroSub: "连接你的音乐密码键盘，选个游戏，开始弹奏。",
+        footerBrand: "音乐密码游戏厅",
         statGames: "款游戏", statKeys: "个琴键", statLED: "种灯光", statCat: "大类别",
         midiChecking: "正在连接 MIDI…",
-        midiConnected: "PartyKeys 已连接",
+        midiConnected: "音乐密码已连接",
         midiGeneric: "MIDI 设备已连接",
         midiPrompt: "未检测到 MIDI 设备 — 点击重试",
         midiAllow: "MIDI 权限被拒绝 — 点击重试",
